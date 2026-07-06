@@ -1,0 +1,25 @@
+<script>
+  function setStatus(text) {
+    document.getElementById("statusText").innerHTML = text;
+  }
+
+  function generatePrompt() {
+    setStatus("Generating Prompt...");
+
+    const notes = document.getElementById("notes").value;
+
+    google.script.run
+
+      .withSuccessHandler(function (prompt) {
+        navigator.clipboard.writeText(prompt);
+
+        setStatus("Prompt copied to clipboard");
+      })
+
+      .withFailureHandler(function (err) {
+        setStatus(err.message);
+      })
+
+      .generatePrompt(notes);
+  }
+</script>

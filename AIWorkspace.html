@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+  <head>
+    <base target="_top" />
+
+    <?!= HtmlService.createHtmlOutputFromFile('AIWorkspaceCSS').getContent(); ?>
+  </head>
+
+  <body>
+    <div class="header">
+      <div class="title">LEGEND AI WORKSPACE</div>
+
+      <div class="subtitle">Meeting Intelligence Platform</div>
+    </div>
+
+    <div class="steps">
+      <div class="step active" id="step1">
+        <span>①</span>
+
+        Meeting Notes
+      </div>
+
+      <div class="step" id="step2">
+        <span>②</span>
+
+        Prompt
+      </div>
+
+      <div class="step" id="step3">
+        <span>③</span>
+
+        Response
+      </div>
+
+      <div class="step" id="step4">
+        <span>④</span>
+
+        Preview
+      </div>
+
+      <div class="step" id="step5">
+        <span>⑤</span>
+
+        Insert
+      </div>
+    </div>
+
+    <div class="workspace">
+      <div id="pageNotes">
+        <label>Paste Meeting Notes</label>
+
+        <textarea id="notes"></textarea>
+
+        <button onclick="generatePrompt()">Generate Prompt</button>
+      </div>
+    </div>
+
+    <div class="statusBar">
+      Status :
+
+      <span id="statusText"> Ready </span>
+    </div>
+
+    <?!= HtmlService.createHtmlOutputFromFile('AIWorkspaceJS').getContent(); ?>
+  </body>
+</html>

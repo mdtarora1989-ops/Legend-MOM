@@ -2,14 +2,20 @@
  AI Controller
 *************************************************************/
 
-function openAIAssistant() {
-  SpreadsheetApp.getUi()
+function openAIAssistant(){
 
-    .showSidebar(
-      HtmlService.createHtmlOutputFromFile("AISidebar")
+SpreadsheetApp.getUi()
 
-        .setTitle("Legend AI Assistant"),
-    );
+.showSidebar(
+
+HtmlService
+
+.createHtmlOutputFromFile("AIWorkspace")
+
+.setTitle("Legend AI Workspace")
+
+);
+
 }
 
 function generatePrompt(notes) {
