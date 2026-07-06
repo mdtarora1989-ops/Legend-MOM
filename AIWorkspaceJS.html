@@ -1,37 +1,83 @@
 <script>
-  function setStatus(text) {
-    document.getElementById("statusText").innerHTML = text;
-  }
 
-  function generatePrompt() {
-    setStatus("Generating Prompt...");
+function setStatus(text){
 
-    const notes = document.getElementById("notes").value;
+document.getElementById("statusText").innerHTML=text;
 
-    google.script.run
+}
 
-      .withSuccessHandler(function (prompt) {
-        document.getElementById("promptPanel").style.display = "block";
+function generatePrompt(){
 
-        document.getElementById("promptBox").value = prompt;
+setStatus("Generating Prompt...");
 
-        setStatus("Prompt Ready");
-      })
+const notes=document.getElementById("notes").value;
 
-      .withFailureHandler(function (err) {
-        setStatus(err.message);
-      })
+google.script.run
 
-      .generatePrompt(notes);
-  }
+.withSuccessHandler(function(prompt){
 
-  function copyPrompt() {
-    const box = document.getElementById("promptBox");
+document.getElementById("promptPanel").style.display="block";
 
-    box.select();
+document.getElementById("responsePanel").style.display="block";
 
-    document.execCommand("copy");
+document.getElementById("promptBox").value=prompt;
 
-    setStatus("Prompt Copied");
-  }
+setStatus("Prompt Ready");
+
+})
+
+.generatePrompt(notes);
+
+}
+
+function copyPrompt(){
+
+const box=document.getElementById("promptBox");
+
+box.select();
+
+document.execCommand("copy");
+
+setStatus("Prompt Copied");
+
+}
+
+function validateResponse(){
+
+const response=document.getElementById("responseBox").value;
+
+google.script.run
+
+.withSuccessHandler(function(result){
+
+document.getElementById("previewPanel").style.display="block";
+
+document.getElementById("previewArea").textContent=result.preview;
+
+setStatus(result.message);
+
+})
+
+.withFailureHandler(function(err){
+
+alert(err.message);
+
+setStatus("Validation Failed");
+
+})
+
+.validateAIResponse(response);
+
+}
+
+function insertResponse(){
+
+google.script.run
+
+.insertValidatedResponse();
+
+setStatus("Inserted");
+
+}
+
 </script>

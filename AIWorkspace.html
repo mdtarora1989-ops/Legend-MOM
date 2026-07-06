@@ -68,6 +68,41 @@ Generate Prompt
 class="panel"
 id="promptPanel"
 style="display:none;">
+<div
+class="panel"
+id="responsePanel"
+style="display:none;">
+
+<h3>STEP 3 - ChatGPT Response</h3>
+
+<textarea
+id="responseBox"
+placeholder="Paste ChatGPT JSON here..."></textarea>
+
+<button onclick="validateResponse()">
+
+Validate Response
+
+</button>
+
+</div>
+
+<div
+class="panel"
+id="previewPanel"
+style="display:none;">
+
+<h3>STEP 4 - Preview</h3>
+
+<pre id="previewArea"></pre>
+
+<button onclick="insertResponse()">
+
+Insert Into MOM
+
+</button>
+
+</div>
 
 <h3>STEP 2 - AI Prompt</h3>
 
