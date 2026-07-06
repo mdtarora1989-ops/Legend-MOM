@@ -1,83 +1,79 @@
 <script>
+  function setStatus(text) {
+    document.getElementById("statusText").innerHTML = text;
+  }
 
-function setStatus(text){
+  function generatePrompt() {
+    setStatus("Generating Prompt...");
 
-document.getElementById("statusText").innerHTML=text;
+    const notes = document.getElementById("notes").value;
 
-}
+    google.script.run
 
-function generatePrompt(){
+      .withSuccessHandler(function (prompt) {
+        document.getElementById("promptPanel").style.display = "block";
 
-setStatus("Generating Prompt...");
+        document.getElementById("responsePanel").style.display = "block";
 
-const notes=document.getElementById("notes").value;
+        document.getElementById("promptBox").value = prompt;
 
-google.script.run
+        setStatus("Prompt Ready");
+      })
 
-.withSuccessHandler(function(prompt){
+      .generatePrompt(notes);
+  }
 
-document.getElementById("promptPanel").style.display="block";
+  function copyPrompt() {
+    const box = document.getElementById("promptBox");
 
-document.getElementById("responsePanel").style.display="block";
+    box.select();
 
-document.getElementById("promptBox").value=prompt;
+    document.execCommand("copy");
 
-setStatus("Prompt Ready");
+    setStatus("Prompt Copied");
+  }
 
-})
+  function validateResponse() {
+    const response = document.getElementById("responseBox").value;
 
-.generatePrompt(notes);
+    google.script.run
 
-}
+      .withSuccessHandler(function (result) {
+        document.getElementById("previewPanel").style.display = "block";
 
-function copyPrompt(){
+        document.getElementById("previewArea").textContent = result.preview;
 
-const box=document.getElementById("promptBox");
+        setStatus(result.message);
+      })
 
-box.select();
+      .withFailureHandler(function (err) {
+        alert(err.message);
 
-document.execCommand("copy");
+        setStatus("Validation Failed");
+      })
 
-setStatus("Prompt Copied");
+      .validateAIResponse(response);
+  }
 
-}
+  function insertResponse() {
+    const response = document.getElementById("responseBox").value;
 
-function validateResponse(){
+    setStatus("Inserting...");
 
-const response=document.getElementById("responseBox").value;
+    google.script.run
 
-google.script.run
+      .withSuccessHandler(function (result) {
+        if (result.success) {
+          setStatus("✅ " + result.message);
 
-.withSuccessHandler(function(result){
+          alert("Meeting Created\n\nMeeting Code : " + result.meetingCode);
+        } else {
+          alert(result.message);
 
-document.getElementById("previewPanel").style.display="block";
+          setStatus("Insert Failed");
+        }
+      })
 
-document.getElementById("previewArea").textContent=result.preview;
-
-setStatus(result.message);
-
-})
-
-.withFailureHandler(function(err){
-
-alert(err.message);
-
-setStatus("Validation Failed");
-
-})
-
-.validateAIResponse(response);
-
-}
-
-function insertResponse(){
-
-google.script.run
-
-.insertValidatedResponse();
-
-setStatus("Inserted");
-
-}
-
+      .insertValidatedResponse(response);
+  }
 </script>

@@ -31,8 +31,38 @@ function validateAIResponse(text) {
   };
 }
 
-function insertValidatedResponse() {
-  SpreadsheetApp.getUi()
+/**********************************************************************
+ * Inserts AI Response into MOM
+ **********************************************************************/
+function insertValidatedResponse(aiResponse) {
+  try {
+    var text = String(aiResponse || "").trim();
 
-    .alert("Insert Pipeline will be connected in B4.");
+    // Remove Markdown code fences
+    text = text.replace(/^```json\s*/i, "");
+    text = text.replace(/^```\s*/i, "");
+    text = text.replace(/\s*```$/, "");
+
+    var json = JSON.parse(text);
+
+    var result = AIMapper.insert(json);
+
+    return {
+      success: true,
+
+      meetingCode: result.meetingCode,
+
+      startRow: result.startRow,
+
+      endRow: result.endRow,
+
+      message: "Meeting inserted successfully.",
+    };
+  } catch (error) {
+    return {
+      success: false,
+
+      message: error.message,
+    };
+  }
 }
