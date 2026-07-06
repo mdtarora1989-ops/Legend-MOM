@@ -2,22 +2,14 @@
  AI Controller
 *************************************************************/
 
-function openAIAssistant(){
+function openAIAssistant() {
+  const template = HtmlService.createTemplateFromFile("AIWorkspace");
 
-SpreadsheetApp.getUi()
-
-.showSidebar(
-
-HtmlService
-
-.createHtmlOutputFromFile("AIWorkspace")
-
-.setTitle("Legend AI Workspace")
-
-);
-
+  SpreadsheetApp.getUi().showSidebar(
+    template.evaluate().setTitle("Legend AI Workspace"),
+  );
 }
 
-function generatePrompt(notes) {
-  return PromptEngine.build(PromptEngine.TYPES.MOM, notes);
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }

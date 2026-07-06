@@ -11,9 +11,11 @@
     google.script.run
 
       .withSuccessHandler(function (prompt) {
-        navigator.clipboard.writeText(prompt);
+        document.getElementById("promptPanel").style.display = "block";
 
-        setStatus("Prompt copied to clipboard");
+        document.getElementById("promptBox").value = prompt;
+
+        setStatus("Prompt Ready");
       })
 
       .withFailureHandler(function (err) {
@@ -21,5 +23,15 @@
       })
 
       .generatePrompt(notes);
+  }
+
+  function copyPrompt() {
+    const box = document.getElementById("promptBox");
+
+    box.select();
+
+    document.execCommand("copy");
+
+    setStatus("Prompt Copied");
   }
 </script>

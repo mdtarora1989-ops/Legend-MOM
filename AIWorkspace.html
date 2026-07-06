@@ -44,8 +44,46 @@
         Insert
       </div>
     </div>
+<div class="workspace">
 
-    <div class="workspace">
+<!-- STEP 1 -->
+
+<div class="panel">
+
+<h3>STEP 1 - Meeting Notes</h3>
+
+<textarea
+id="notes"
+placeholder="Paste meeting notes here..."></textarea>
+
+<button onclick="generatePrompt()">
+Generate Prompt
+</button>
+
+</div>
+
+<!-- STEP 2 -->
+
+<div
+class="panel"
+id="promptPanel"
+style="display:none;">
+
+<h3>STEP 2 - AI Prompt</h3>
+
+<textarea
+id="promptBox"
+readonly></textarea>
+
+<button onclick="copyPrompt()">
+
+Copy Prompt
+
+</button>
+
+</div>
+
+</div>
       <div id="pageNotes">
         <label>Paste Meeting Notes</label>
 
