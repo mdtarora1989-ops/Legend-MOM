@@ -1,1 +1,95 @@
-git 
+<!doctype html>
+<html>
+  <head>
+    <base target="_top" />
+
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+
+        padding: 15px;
+
+        background: #f5f7fa;
+      }
+
+      h2 {
+        margin-top: 0;
+
+        color: #1565c0;
+      }
+
+      textarea {
+        width: 100%;
+
+        height: 220px;
+
+        resize: vertical;
+
+        padding: 10px;
+
+        font-size: 13px;
+      }
+
+      button {
+        width: 100%;
+
+        margin-top: 10px;
+
+        padding: 10px;
+
+        border: none;
+
+        background: #1565c0;
+
+        color: white;
+
+        font-size: 14px;
+
+        cursor: pointer;
+
+        border-radius: 4px;
+      }
+
+      button:hover {
+        background: #0d47a1;
+      }
+
+      #status {
+        margin-top: 10px;
+
+        font-size: 12px;
+
+        color: green;
+
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h2>🤖 Legend AI Assistant</h2>
+
+    <textarea
+      id="notes"
+      placeholder="Paste rough meeting notes here..."
+    ></textarea>
+
+    <button onclick="generatePrompt()">Generate Prompt</button>
+
+    <div id="status"></div>
+
+    <script>
+      function generatePrompt() {
+        const notes = document.getElementById("notes").value;
+
+        google.script.run
+
+          .withSuccessHandler(function (prompt) {
+            document.getElementById("status").innerText = prompt;
+          })
+
+          .generatePrompt(notes);
+      }
+    </script>
+  </body>
+</html>
