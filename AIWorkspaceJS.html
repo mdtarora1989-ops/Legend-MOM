@@ -1,49 +1,102 @@
 <script>
-  function setStatus(text) {
-    document.getElementById("statusText").innerHTML = text;
+  let generatedPrompt = "";
+  let validatedJSON = null;
+
+  /*************************************************
+   * Status
+   *************************************************/
+  function setStatus(message) {
+    document.getElementById("statusText").textContent = message;
   }
 
+  /*************************************************
+   * Generate Prompt
+   *************************************************/
   function generatePrompt() {
-    setStatus("Generating Prompt...");
+    const notes = document.getElementById("notes").value.trim();
 
-    const notes = document.getElementById("notes").value;
+    if (notes === "") {
+      alert("Please enter meeting notes.");
+
+      return;
+    }
+
+    setStatus("Generating AI Prompt...");
 
     google.script.run
 
       .withSuccessHandler(function (prompt) {
-        document.getElementById("promptPanel").style.display = "block";
-
-        document.getElementById("responsePanel").style.display = "block";
+        generatedPrompt = prompt;
 
         document.getElementById("promptBox").value = prompt;
 
+        document.getElementById("promptCard").style.display = "block";
+
+        document.getElementById("responseCard").style.display = "block";
+
         setStatus("Prompt Ready");
+      })
+
+      .withFailureHandler(function (error) {
+        setStatus("Failed");
+
+        alert(error.message);
       })
 
       .generatePrompt(notes);
   }
 
+  /*************************************************
+   * Copy Prompt
+   *************************************************/
   function copyPrompt() {
-    const box = document.getElementById("promptBox");
+    if (generatedPrompt === "") {
+      alert("Generate prompt first.");
 
-    box.select();
+      return;
+    }
 
-    document.execCommand("copy");
+    navigator.clipboard.writeText(generatedPrompt);
 
-    setStatus("Prompt Copied");
+    setStatus("Prompt copied to clipboard.");
   }
 
+  /*************************************************
+   * Validate JSON
+   *************************************************/
   function validateResponse() {
-    const response = document.getElementById("responseBox").value;
+    const response = document.getElementById("responseBox").value.trim();
+
+    if (response === "") {
+      alert("Paste ChatGPT response first.");
+
+      return;
+    }
+
+    setStatus("Validating...");
 
     google.script.run
 
       .withSuccessHandler(function (result) {
-        document.getElementById("previewPanel").style.display = "block";
+        if (!result.success) {
+          alert(result.message);
 
-        document.getElementById("previewArea").textContent = result.preview;
+          setStatus("Validation Failed");
 
-        setStatus(result.message);
+          return;
+        }
+
+        validatedJSON = result.data;
+
+        document.getElementById("previewCard").style.display = "block";
+
+        document.getElementById("previewArea").textContent = JSON.stringify(
+          result.data,
+          null,
+          2,
+        );
+
+        setStatus("JSON Valid");
       })
 
       .withFailureHandler(function (err) {
@@ -55,8 +108,15 @@
       .validateAIResponse(response);
   }
 
+  /*************************************************
+   * Insert
+   *************************************************/
   function insertResponse() {
-    const response = document.getElementById("responseBox").value;
+    if (validatedJSON == null) {
+      alert("Validate response first.");
+
+      return;
+    }
 
     setStatus("Inserting...");
 
@@ -64,9 +124,11 @@
 
       .withSuccessHandler(function (result) {
         if (result.success) {
-          setStatus("✅ " + result.message);
+          alert("Meeting Created\n\n" + "Meeting Code : " + result.meetingCode);
 
-          alert("Meeting Created\n\nMeeting Code : " + result.meetingCode);
+          setStatus("Completed");
+
+          resetWorkspace();
         } else {
           alert(result.message);
 
@@ -74,6 +136,37 @@
         }
       })
 
-      .insertValidatedResponse(response);
+      .withFailureHandler(function (err) {
+        alert(err.message);
+
+        setStatus("Insert Failed");
+      })
+
+      .insertValidatedResponse(JSON.stringify(validatedJSON));
+  }
+
+  /*************************************************
+   * Reset
+   *************************************************/
+  function resetWorkspace() {
+    generatedPrompt = "";
+
+    validatedJSON = null;
+
+    document.getElementById("notes").value = "";
+
+    document.getElementById("promptBox").value = "";
+
+    document.getElementById("responseBox").value = "";
+
+    document.getElementById("previewArea").textContent = "";
+
+    document.getElementById("promptCard").style.display = "none";
+
+    document.getElementById("responseCard").style.display = "none";
+
+    document.getElementById("previewCard").style.display = "none";
+
+    setStatus("Ready");
   }
 </script>

@@ -1,51 +1,95 @@
-/*************************************************************
- AI Controller
-*************************************************************/
+/**********************************************************************
+ * Legend MOM Management System
+ * --------------------------------------------------------------------
+ * Module  : AIController.js
+ * Version : 2.0
+ * Purpose : AI Workspace Controller
+ **********************************************************************/
 
-function openAIAssistant() {
-  const template = HtmlService.createTemplateFromFile("AIWorkspace");
-
-  SpreadsheetApp.getUi().showSidebar(
-    template.evaluate().setTitle("Legend AI Workspace"),
-  );
-}
-
+/**
+ * Include HTML Partials
+ */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
+
+/**
+ * Opens AI Workspace
+ */
+function openAIAssistant() {
+  const html = HtmlService.createTemplateFromFile("AIWorkspace")
+    .evaluate()
+    .setTitle("Legend AI Workspace");
+
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+/**
+ * Generates AI Prompt
+ */
+function generatePrompt(notes) {
+  notes = String(notes || "").trim();
+
+  if (notes === "") {
+    throw new Error("Meeting notes cannot be empty.");
+  }
+
+  return PromptEngine.build(PromptEngine.TYPES.MOM, notes);
+}
+
+/**
+ * Validate AI JSON
+ */
 function validateAIResponse(text) {
-  text = text.trim();
+  text = String(text || "").trim();
+
+  if (text === "") {
+    return {
+      success: false,
+
+      message: "Empty AI response.",
+    };
+  }
+
+  // Remove Markdown
 
   text = text.replace(/^```json/i, "");
 
   text = text.replace(/^```/i, "");
 
-  text = text.replace(/```$/, "");
+  text = text.replace(/```$/i, "");
 
-  const obj = JSON.parse(text);
+  try {
+    const json = JSON.parse(text);
 
-  return {
-    message: "JSON Valid",
+    return {
+      success: true,
 
-    preview: JSON.stringify(obj, null, 2),
-  };
+      message: "JSON Valid",
+
+      data: json,
+    };
+  } catch (error) {
+    return {
+      success: false,
+
+      message: "Invalid JSON\n\n" + error.message,
+    };
+  }
 }
 
-/**********************************************************************
- * Inserts AI Response into MOM
- **********************************************************************/
-function insertValidatedResponse(aiResponse) {
+/**
+ * Insert AI Response
+ */
+function insertValidatedResponse(text) {
+  const validation = validateAIResponse(text);
+
+  if (!validation.success) {
+    return validation;
+  }
+
   try {
-    var text = String(aiResponse || "").trim();
-
-    // Remove Markdown code fences
-    text = text.replace(/^```json\s*/i, "");
-    text = text.replace(/^```\s*/i, "");
-    text = text.replace(/\s*```$/, "");
-
-    var json = JSON.parse(text);
-
-    var result = AIMapper.insert(json);
+    const result = AIMapper.insert(validation.data);
 
     return {
       success: true,
@@ -65,4 +109,15 @@ function insertValidatedResponse(aiResponse) {
       message: error.message,
     };
   }
+}
+
+/**
+ * Controller Health Check
+ */
+function aiControllerHealthCheck() {
+  Logger.log("================================");
+
+  Logger.log("AI Controller Ready");
+
+  Logger.log("================================");
 }

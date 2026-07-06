@@ -3,137 +3,126 @@
   <head>
     <base target="_top" />
 
-    <?!= HtmlService.createHtmlOutputFromFile('AIWorkspaceCSS').getContent(); ?>
+    <?!= include('AIWorkspaceCSS'); ?>
   </head>
 
   <body>
-    <div class="header">
-      <div class="title">LEGEND AI WORKSPACE</div>
+    <div class="app">
+      <!-- HEADER -->
 
-      <div class="subtitle">Meeting Intelligence Platform</div>
-    </div>
+      <div class="header">
+        <div class="title">LEGEND AI WORKSPACE</div>
 
-    <div class="steps">
-      <div class="step active" id="step1">
-        <span>①</span>
-
-        Meeting Notes
+        <div class="subtitle">Intelligent Meeting Management Platform</div>
       </div>
 
-      <div class="step" id="step2">
-        <span>②</span>
+      <!-- STEP BAR -->
 
-        Prompt
+      <div class="stepBar">
+        <div class="step active">
+          <div class="circle">1</div>
+
+          <div class="label">Notes</div>
+        </div>
+
+        <div class="step">
+          <div class="circle">2</div>
+
+          <div class="label">Prompt</div>
+        </div>
+
+        <div class="step">
+          <div class="circle">3</div>
+
+          <div class="label">AI Reply</div>
+        </div>
+
+        <div class="step">
+          <div class="circle">4</div>
+
+          <div class="label">Preview</div>
+        </div>
+
+        <div class="step">
+          <div class="circle">5</div>
+
+          <div class="label">Insert</div>
+        </div>
       </div>
 
-      <div class="step" id="step3">
-        <span>③</span>
+      <!-- CONTENT -->
 
-        Response
+      <div class="content">
+        <!-- STEP 1 -->
+
+        <div class="card">
+          <h2>Step 1</h2>
+
+          <h3>Meeting Notes</h3>
+
+          <textarea
+            id="notes"
+            placeholder="Paste meeting notes here..."
+          ></textarea>
+
+          <button class="primary" onclick="generatePrompt()">
+            Generate AI Prompt
+          </button>
+        </div>
+
+        <!-- STEP 2 -->
+
+        <div class="card" id="promptCard" style="display: none">
+          <h2>Step 2</h2>
+
+          <h3>Generated Prompt</h3>
+
+          <textarea id="promptBox" readonly></textarea>
+
+          <button class="secondary" onclick="copyPrompt()">Copy Prompt</button>
+        </div>
+
+        <!-- STEP 3 -->
+
+        <div class="card" id="responseCard" style="display: none">
+          <h2>Step 3</h2>
+
+          <h3>Paste ChatGPT Response</h3>
+
+          <textarea
+            id="responseBox"
+            placeholder="Paste ChatGPT JSON here..."
+          ></textarea>
+
+          <button class="primary" onclick="validateResponse()">
+            Validate Response
+          </button>
+        </div>
+
+        <!-- STEP 4 -->
+
+        <div class="card" id="previewCard" style="display: none">
+          <h2>Step 4</h2>
+
+          <h3>Preview</h3>
+
+          <pre id="previewArea"></pre>
+
+          <button class="success" onclick="insertResponse()">
+            Insert into MOM
+          </button>
+        </div>
       </div>
 
-      <div class="step" id="step4">
-        <span>④</span>
+      <!-- STATUS -->
 
-        Preview
-      </div>
+      <div class="statusBar">
+        <strong>Status :</strong>
 
-      <div class="step" id="step5">
-        <span>⑤</span>
-
-        Insert
-      </div>
-    </div>
-<div class="workspace">
-
-<!-- STEP 1 -->
-
-<div class="panel">
-
-<h3>STEP 1 - Meeting Notes</h3>
-
-<textarea
-id="notes"
-placeholder="Paste meeting notes here..."></textarea>
-
-<button onclick="generatePrompt()">
-Generate Prompt
-</button>
-
-</div>
-
-<!-- STEP 2 -->
-
-<div
-class="panel"
-id="promptPanel"
-style="display:none;">
-<div
-class="panel"
-id="responsePanel"
-style="display:none;">
-
-<h3>STEP 3 - ChatGPT Response</h3>
-
-<textarea
-id="responseBox"
-placeholder="Paste ChatGPT JSON here..."></textarea>
-
-<button onclick="validateResponse()">
-
-Validate Response
-
-</button>
-
-</div>
-
-<div
-class="panel"
-id="previewPanel"
-style="display:none;">
-
-<h3>STEP 4 - Preview</h3>
-
-<pre id="previewArea"></pre>
-
-<button onclick="insertResponse()">
-
-Insert Into MOM
-
-</button>
-
-</div>
-
-<h3>STEP 2 - AI Prompt</h3>
-
-<textarea
-id="promptBox"
-readonly></textarea>
-
-<button onclick="copyPrompt()">
-
-Copy Prompt
-
-</button>
-
-</div>
-
-</div>
-      <div id="pageNotes">
-        <label>Paste Meeting Notes</label>
-
-        <textarea id="notes"></textarea>
-
-        <button onclick="generatePrompt()">Generate Prompt</button>
+        <span id="statusText"> Ready </span>
       </div>
     </div>
 
-    <div class="statusBar">
-      Status :
-
-      <span id="statusText"> Ready </span>
-    </div>
-
-    <?!= HtmlService.createHtmlOutputFromFile('AIWorkspaceJS').getContent(); ?>
+    <?!= include('AIWorkspaceJS'); ?>
   </body>
 </html>
