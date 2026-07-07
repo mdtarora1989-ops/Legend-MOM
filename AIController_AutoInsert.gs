@@ -3,13 +3,22 @@
  * ------------------------------------------------------------
  * File    : AIController_AutoInsert.gs
  * Purpose : Build prompt, call OpenAI, extract JSON, validate and insert
+ * CHANGELOG: Added fallback to normalize times and fill chairedBy from notes.
  **********************************************************************/
 
 function generateAndInsertFromNotes(notes) {
   notes = String(notes || "").trim();
   if (!notes) throw new Error("Meeting notes required.");
 
-  var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, notes);
+  // Build prompt (we pass notes; parseHints optional)
+  var hints = {};
+  try {
+    hints = parseTimesAndChairFromNotes(notes) || {};
+  } catch (e) {
+    hints = {};
+  }
+
+  var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, notes, hints);
 
   var response = AIFormatter.callOpenAI(prompt);
 
@@ -64,7 +73,60 @@ function generateAndInsertFromNotes(notes) {
     throw new Error("AI response validation failed:\n" + validation.message);
   }
 
-  var result = AIMapper.insert(validation.data);
+  // --- Fallback: normalize times & fill missing chairedBy from notes ---
+  var aiData = validation.data || {};
+
+  var parsed = {};
+  try {
+    parsed = parseTimesAndChairFromNotes(notes) || {};
+  } catch (e) {
+    parsed = {};
+  }
+
+  try {
+    if (aiData.startTime) {
+      var snorm = convertTo24h(aiData.startTime);
+      if (snorm) aiData.startTime = snorm;
+    }
+    if (aiData.endTime) {
+      var enorm = convertTo24h(aiData.endTime);
+      if (enorm) aiData.endTime = enorm;
+    }
+
+    if ((!aiData.startTime || aiData.startTime === "") && parsed.startTime) {
+      aiData.startTime = parsed.startTime;
+      aiData.rawStart = parsed.rawStart || parsed.startTime || "";
+    } else if (!aiData.rawStart && parsed.rawStart) {
+      aiData.rawStart = parsed.rawStart || "";
+    }
+
+    if ((!aiData.endTime || aiData.endTime === "") && parsed.endTime) {
+      aiData.endTime = parsed.endTime;
+      aiData.rawEnd = parsed.rawEnd || parsed.endTime || "";
+    } else if (!aiData.rawEnd && parsed.rawEnd) {
+      aiData.rawEnd = parsed.rawEnd || "";
+    }
+
+    if ((!aiData.chairedBy || aiData.chairedBy === "") && parsed.chairedBy) {
+      aiData.chairedBy = parsed.chairedBy;
+      aiData.rawChairedBy = parsed.rawChairedBy || parsed.chairedBy || "";
+    } else if (!aiData.rawChairedBy && parsed.rawChairedBy) {
+      aiData.rawChairedBy = parsed.rawChairedBy || "";
+    }
+
+    aiData.startTime = aiData.startTime || "";
+    aiData.endTime = aiData.endTime || "";
+    aiData.chairedBy = aiData.chairedBy || "";
+    aiData.rawStart = aiData.rawStart || "";
+    aiData.rawEnd = aiData.rawEnd || "";
+    aiData.rawChairedBy = aiData.rawChairedBy || "";
+  } catch (e) {
+    Logger.log("Fallback parse/apply error: " + e.message);
+  }
+
+  Logger.log("AI data after fallback: " + JSON.stringify(aiData, null, 2));
+
+  var result = AIMapper.insert(aiData);
 
   return {
     success: true,
