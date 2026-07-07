@@ -1,6 +1,7 @@
 /**********************************************************************
  * Legend MOM Management System
- * ------------------------------------------------------------
+ * --------------------------------------------------------------------
+ * Module  : Bootstrap.gs
  * Version : 2.0 Professional
  * Module  : Bootstrap.gs
  * Purpose : Initial Application Setup
@@ -33,6 +34,8 @@ function initializeLegendMOM() {
 
   try {
     createSystemConfigSheet();
+    // Create main MOM sheet if missing
+    createMomSheet();
 
     APP_LOGGER.info("System initialized successfully.");
 
@@ -68,21 +71,13 @@ function createSystemConfigSheet() {
 
   const data = [
     ["KEY", "VALUE"],
-
     ["APP_NAME", CONFIG.APP_NAME],
-
     ["VERSION", CONFIG.VERSION],
-
     ["COMPANY", CONFIG.COMPANY],
-
     ["MEETING_PREFIX", CONFIG.MEETING_PREFIX],
-
     ["DEFAULT_RECORD_STATUS", CONFIG.DEFAULT_RECORD_STATUS],
-
     ["DEFAULT_LOCATION", CONFIG.DEFAULT_LOCATION],
-
     ["DEFAULT_MEETING_TYPE", CONFIG.DEFAULT_MEETING_TYPE],
-
     ["LAST_UPDATED", new Date()],
   ];
 
