@@ -47,6 +47,36 @@
   }
 
   /*************************************************
+   * Auto Generate & Insert (one-click flow)
+   *************************************************/
+  function autoGenerateAndInsert() {
+    const notes = document.getElementById("notes").value.trim();
+    if (notes === "") {
+      alert("Please enter meeting notes.");
+      return;
+    }
+
+    setStatus("Calling AI...");
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.success) {
+          alert("Meeting Created: " + res.meetingCode);
+          setStatus("Completed");
+          resetWorkspace();
+        } else {
+          alert("Failed: " + (res && res.message ? res.message : 'Unknown'));
+          setStatus("Failed");
+        }
+      })
+      .withFailureHandler(function (err) {
+        alert("Failed: " + err.message);
+        setStatus("Failed");
+      })
+      .generateAndInsertFromNotes(notes);
+  }
+
+  /*************************************************
    * Copy Prompt
    *************************************************/
   function copyPrompt() {
