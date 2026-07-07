@@ -24,8 +24,6 @@ const CONFIG = Object.freeze({
 
   FIRST_DATA_ROW: 2,
 
-
-
   //==============================================================
   // MENU
   //==============================================================
@@ -40,8 +38,6 @@ const CONFIG = Object.freeze({
 
   MENU_ABOUT: "ℹ About",
 
-
-
   //==============================================================
   // DEFAULT VALUES
   //==============================================================
@@ -54,16 +50,13 @@ const CONFIG = Object.freeze({
 
   MEETING_PREFIX: "LM",
 
-
-
   //==============================================================
   // SHEET HEADERS
-  // (Must exactly match Google Sheet)
+  // (Use the actual long header strings if desired)
   //==============================================================
-
   HEADERS: Object.freeze({
 
-    SERIAL: "S.No.",
+    SERIAL: "S. No",
 
     DATE: "Date",
 
@@ -91,142 +84,151 @@ const CONFIG = Object.freeze({
 
 });
 
-
 /**********************************************************************
  * Returns active spreadsheet
  **********************************************************************/
 function getSpreadsheet() {
-
   return SpreadsheetApp.getActiveSpreadsheet();
-
 }
-
 
 /**********************************************************************
  * Returns MOM sheet
  **********************************************************************/
 function getMomSheet() {
-
   const sheet = getSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
-
   if (!sheet) {
-
-    throw new Error(
-      "Sheet not found : " + CONFIG.SHEET_NAME
-    );
-
+    throw new Error("Sheet not found : " + CONFIG.SHEET_NAME);
   }
-
   return sheet;
-
 }
-
 
 /**********************************************************************
  * Reads header row
  **********************************************************************/
 function getHeaderRow() {
-
   const sheet = getMomSheet();
-
   const lastColumn = sheet.getLastColumn();
-
+  // Read the header row across the current lastColumn
   return sheet
     .getRange(CONFIG.HEADER_ROW, 1, 1, lastColumn)
     .getValues()[0];
-
 }
 
+/**********************************************************************
+ * Header normalization helper
+ **********************************************************************/
+function normalizeHeaderText(s) {
+  return String(s || "")
+    .replace(/\u00A0/g, " ") // NBSP -> space
+    .replace(/\s+/g, " ") // collapse whitespace
+    .trim()
+    .toLowerCase();
+}
 
 /**********************************************************************
- * Builds dynamic column map
+ * Builds dynamic column map — tolerant matching
  *
- * Example
+ * Returns a map of CONFIG header keys to 1-based column numbers:
  * {
- *   DATE : 2,
- *   START_TIME : 3
+ *   DATE: 2,
+ *   START_TIME: 3
  * }
  **********************************************************************/
 function getColumnMap() {
-
   const headers = getHeaderRow();
-
   const map = {};
+  // Normalize the sheet headers
+  const normalizedHeaders = headers.map(h => normalizeHeaderText(h));
 
-  Object.keys(CONFIG.HEADERS).forEach(function(key){
+  // Build reverse lookup: normalized header -> index (1-based)
+  const headerIndex = {};
+  for (let i = 0; i < normalizedHeaders.length; i++) {
+    headerIndex[normalizedHeaders[i]] = i + 1;
+  }
 
-    const headerName = CONFIG.HEADERS[key];
+  const notFound = [];
 
-    const index = headers.indexOf(headerName);
+  Object.keys(CONFIG.HEADERS).forEach(function (key) {
+    const expected = CONFIG.HEADERS[key];
+    const normExpected = normalizeHeaderText(expected);
 
-    if(index === -1){
-
-      throw new Error(
-        "Required column not found : " + headerName
-      );
-
+    // Exact normalized match
+    if (normExpected in headerIndex) {
+      map[key] = headerIndex[normExpected];
+      return;
     }
 
-    map[key] = index + 1;
+    // Soft-match: all words of expected appear in a sheet header
+    const expectedWords = normExpected.split(" ").filter(Boolean);
+    let foundIndex = -1;
+    for (let i = 0; i < normalizedHeaders.length; i++) {
+      const h = normalizedHeaders[i];
+      let allPresent = true;
+      for (let j = 0; j < expectedWords.length; j++) {
+        if (h.indexOf(expectedWords[j]) === -1) {
+          allPresent = false;
+          break;
+        }
+      }
+      if (allPresent) {
+        foundIndex = i + 1;
+        break;
+      }
+    }
 
+    if (foundIndex !== -1) {
+      map[key] = foundIndex;
+      Logger.log("Warning: loosely matched header '" + expected + "' to sheet header '" + headers[foundIndex - 1] + "'");
+      return;
+    }
+
+    notFound.push({ key: key, expected: expected });
   });
 
+  if (notFound.length > 0) {
+    // Helpful error message showing what's missing and what sheet headers are
+    let msg = "Some required columns not found in sheet header row:\n";
+    notFound.forEach(function (it) {
+      msg += "- " + it.key + " expected header: '" + it.expected + "'\n";
+    });
+    msg += "\nSheet headers found:\n";
+    headers.forEach(function (h, i) {
+      msg += (i + 1) + ": '" + String(h) + "'\n";
+    });
+    throw new Error(msg);
+  }
+
   return map;
-
 }
-
 
 /**********************************************************************
  * Returns column number
- *
- * Example:
- * getColumn("DATE")
- *
  **********************************************************************/
-function getColumn(name){
-
+function getColumn(name) {
   const map = getColumnMap();
-
-  if(!(name in map)){
-
-    throw new Error(
-      "Unknown column : " + name
-    );
-
+  if (!(name in map)) {
+    throw new Error("Unknown column : " + name);
   }
-
   return map[name];
-
 }
-
 
 /**********************************************************************
  * Returns application information
  **********************************************************************/
-function getAppInfo(){
-
+function getAppInfo() {
   return {
-
     app: CONFIG.APP_NAME,
-
     version: CONFIG.VERSION,
-
     company: CONFIG.COMPANY,
-
     sheet: CONFIG.SHEET_NAME
-
   };
-
 }
-
 
 /**********************************************************************
  * Health Check
  **********************************************************************/
 function configHealthCheck(){
-
   const info = getAppInfo();
-
   Logger.log("======================================");
   Logger.log(info.app);
   Logger.log("Version : " + info.version);
@@ -235,13 +237,9 @@ function configHealthCheck(){
   Logger.log("======================================");
 
   const map = getColumnMap();
-
   Object.keys(map).forEach(function(key){
-
     Logger.log(key + " = Column " + map[key]);
-
   });
 
   Logger.log("CONFIG HEALTH CHECK PASSED");
-
 }
