@@ -47,21 +47,10 @@ ValidationEngine.validate = function (mom) {
 
   }
 
+  // Mandatory fields (must exist and be non-empty)
   if (!mom.date || String(mom.date).trim() === "") {
 
     ValidationEngine.addError(result, "Date is required.");
-
-  }
-
-  if (!mom.startTime || String(mom.startTime).trim() === "") {
-
-    ValidationEngine.addError(result, "Start Time is required.");
-
-  }
-
-  if (!mom.endTime || String(mom.endTime).trim() === "") {
-
-    ValidationEngine.addError(result, "End Time is required.");
 
   }
 
@@ -77,34 +66,31 @@ ValidationEngine.validate = function (mom) {
 
   }
 
-  if (!mom.chairedBy || String(mom.chairedBy).trim() === "") {
-
-    ValidationEngine.addError(result, "Chairperson is required.");
-
-  }
-
-  if (!mom.agenda || String(mom.agenda).trim() === "") {
-
-    ValidationEngine.addError(result, "Agenda is required.");
-
-  }
-
   if (!mom.recordStatus || String(mom.recordStatus).trim() === "") {
 
     ValidationEngine.addError(result, "Record Status is required.");
 
   }
 
-  if (!mom.participants || mom.participants.length === 0) {
-
-    ValidationEngine.addError(result, "At least one participant is required.");
-
-  }
-
+  // At least one discussion item required
   if (!mom.discussion || mom.discussion.length === 0) {
 
     ValidationEngine.addError(result, "At least one discussion point is required.");
 
+  }
+
+  // Optional fields (no hard errors): startTime, endTime, chairedBy, agenda, participants
+  // Attempt to normalize times if normalization helper exists; log warnings instead of failing.
+  try {
+    if (mom.startTime && ValidationEngine.normalizeTime) {
+      mom.startTime = ValidationEngine.normalizeTime(mom.startTime);
+    }
+    if (mom.endTime && ValidationEngine.normalizeTime) {
+      mom.endTime = ValidationEngine.normalizeTime(mom.endTime);
+    }
+  } catch (e) {
+    Logger.log('Time normalization warning: ' + (e && e.message ? e.message : e));
+    // Do not add validation errors for time normalization failures.
   }
 
   return result;
