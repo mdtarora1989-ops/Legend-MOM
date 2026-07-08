@@ -1,138 +1,118 @@
-/**********************************************************************
- * Legend MOM Management System
- * ------------------------------------------------------------
- * File    : AIController_AutoInsert.gs
- * Purpose : Build prompt, call OpenAI, extract JSON, validate and insert
- * CHANGELOG: Added fallback to normalize times and fill chairedBy from notes.
- **********************************************************************/
+/**
+ * AI Auto Insert Controller
+ * Adds a safe wrapper generateAndInsertFromNotes that builds prompt, calls AI,
+ * parses output, maps to MOM, detects duplicates (by meetingCode), and inserts.
+ */
 
+/**
+ * Top-level helper: generate and insert from free-form notes.
+ * Returns a structured result object for diagnostics and testing.
+ */
 function generateAndInsertFromNotes(notes) {
-  notes = String(notes || "").trim();
-  if (!notes) throw new Error("Meeting notes required.");
-
-  // Build prompt (we pass notes; parseHints optional)
-  var hints = {};
-  try {
-    hints = parseTimesAndChairFromNotes(notes) || {};
-  } catch (e) {
-    hints = {};
-  }
-
-  var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, notes, hints);
-
-  var response = AIFormatter.callOpenAI(prompt);
-
-  var candidateText = null;
-
-  // 1) Responses API style: response.output
-  if (response && response.output && Array.isArray(response.output)) {
-    try {
-      var texts = [];
-      response.output.forEach(function (o) {
-        if (typeof o === "string") {
-          texts.push(o);
-        } else if (o.content && Array.isArray(o.content)) {
-          o.content.forEach(function (c) {
-            if (typeof c === "string") texts.push(c);
-            else if (c.type === "output_text" && c.text) texts.push(c.text);
-            else if (c.text) texts.push(c.text);
-          });
-        } else if (o.type === "output_text" && o.text) {
-          texts.push(o.text);
-        }
-      });
-      if (texts.length) candidateText = texts.join("\n");
-    } catch (e) {
-      // continue
-    }
-  }
-
-  // 2) Chat completions / choices
-  if (!candidateText && response && response.choices && response.choices[0]) {
-    var c = response.choices[0];
-    if (c.message && c.message.content) candidateText = c.message.content;
-    else if (c.text) candidateText = c.text;
-  }
-
-  // 3) If response has 'text' at root
-  if (!candidateText && response && typeof response.text === 'string') {
-    candidateText = response.text;
-  }
-
-  // 4) Fallback: if response is string
-  if (!candidateText && response && typeof response === "string") {
-    candidateText = response;
-  }
-
-  if (!candidateText) {
-    throw new Error("Could not extract text from AI response.");
-  }
-
-  var validation = validateAIResponse(candidateText);
-  if (!validation.success) {
-    throw new Error("AI response validation failed:\n" + validation.message);
-  }
-
-  // --- Fallback: normalize times & fill missing chairedBy from notes ---
-  var aiData = validation.data || {};
-
-  var parsed = {};
-  try {
-    parsed = parseTimesAndChairFromNotes(notes) || {};
-  } catch (e) {
-    parsed = {};
-  }
-
-  try {
-    if (aiData.startTime) {
-      var snorm = convertTo24h(aiData.startTime);
-      if (snorm) aiData.startTime = snorm;
-    }
-    if (aiData.endTime) {
-      var enorm = convertTo24h(aiData.endTime);
-      if (enorm) aiData.endTime = enorm;
-    }
-
-    if ((!aiData.startTime || aiData.startTime === "") && parsed.startTime) {
-      aiData.startTime = parsed.startTime;
-      aiData.rawStart = parsed.rawStart || parsed.startTime || "";
-    } else if (!aiData.rawStart && parsed.rawStart) {
-      aiData.rawStart = parsed.rawStart || "";
-    }
-
-    if ((!aiData.endTime || aiData.endTime === "") && parsed.endTime) {
-      aiData.endTime = parsed.endTime;
-      aiData.rawEnd = parsed.rawEnd || parsed.endTime || "";
-    } else if (!aiData.rawEnd && parsed.rawEnd) {
-      aiData.rawEnd = parsed.rawEnd || "";
-    }
-
-    if ((!aiData.chairedBy || aiData.chairedBy === "") && parsed.chairedBy) {
-      aiData.chairedBy = parsed.chairedBy;
-      aiData.rawChairedBy = parsed.rawChairedBy || parsed.chairedBy || "";
-    } else if (!aiData.rawChairedBy && parsed.rawChairedBy) {
-      aiData.rawChairedBy = parsed.rawChairedBy || "";
-    }
-
-    aiData.startTime = aiData.startTime || "";
-    aiData.endTime = aiData.endTime || "";
-    aiData.chairedBy = aiData.chairedBy || "";
-    aiData.rawStart = aiData.rawStart || "";
-    aiData.rawEnd = aiData.rawEnd || "";
-    aiData.rawChairedBy = aiData.rawChairedBy || "";
-  } catch (e) {
-    Logger.log("Fallback parse/apply error: " + e.message);
-  }
-
-  Logger.log("AI data after fallback: " + JSON.stringify(aiData, null, 2));
-
-  var result = AIMapper.insert(aiData);
-
-  return {
-    success: true,
-    meetingCode: result.meetingCode,
-    startRow: result.startRow,
-    endRow: result.endRow,
-    message: "Meeting created successfully.",
+  var result = {
+    success: false,
+    errors: [],
+    aiData: null,
+    mom: null,
+    meetingCode: null,
+    insertedRow: null,
   };
+
+  try {
+    // Extract simple hints from raw notes to nudge the model
+    var hints = {};
+    if (typeof Utils_Fallbacks !== 'undefined' && Utils_Fallbacks.parseTimesAndChairFromNotes) {
+      try { hints = Utils_Fallbacks.parseTimesAndChairFromNotes(notes) || {}; } catch (e) { Logger.log('Hints parse error: ' + e.message); }
+    }
+
+    var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, notes, hints);
+
+    // Call AI runner - try a couple of known entry points
+    var aiRaw = null;
+    var attempts = 2;
+    for (var a = 0; a < attempts; a++) {
+      try {
+        if (typeof AIController !== 'undefined' && AIController.runPrompt) {
+          aiRaw = AIController.runPrompt(prompt);
+        } else if (typeof AIService !== 'undefined' && AIService.generate) {
+          aiRaw = AIService.generate(prompt);
+        } else if (typeof callExternalAI === 'function') {
+          aiRaw = callExternalAI(prompt);
+        } else {
+          throw new Error('No AI runner available (AIController.runPrompt or AIService.generate)');
+        }
+        if (aiRaw) break;
+      } catch (e) {
+        Logger.log('AI call attempt ' + (a+1) + ' failed: ' + e.message);
+        if (a < attempts - 1) {
+          // wait a bit before retrying (Apps Script sleep)
+          if (typeof Utilities !== 'undefined' && Utilities.sleep) Utilities.sleep(800);
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    // Try to get JSON from aiRaw
+    var aiObj = null;
+    if (aiRaw === null || aiRaw === undefined) {
+      throw new Error('AI returned no response');
+    }
+
+    if (typeof aiRaw === 'object') aiObj = aiRaw;
+    else if (typeof aiRaw === 'string') {
+      // Try parse directly
+      try { aiObj = JSON.parse(aiRaw); } catch (e) {
+        // Try to extract JSON substring
+        var m = aiRaw.match(/\{[\s\S]*\}/m);
+        if (m) {
+          try { aiObj = JSON.parse(m[0]); } catch (e2) { aiObj = null; }
+        }
+      }
+    }
+
+    result.aiData = aiObj || aiRaw;
+
+    if (!aiObj) {
+      result.errors.push({ code: 'ai_parse', message: 'Could not parse AI output as JSON', raw: aiRaw });
+      return result;
+    }
+
+    // Map AI JSON to MOM using AIMapper
+    var mom = AIMapper.mapToMOM(aiObj);
+    result.mom = mom;
+    result.meetingCode = mom.meetingCode;
+
+    // Duplicate detection by meeting code
+    if (typeof SheetService !== 'undefined' && SheetService.meetingExists) {
+      if (SheetService.meetingExists(mom.meetingCode)) {
+        result.errors.push({ code: 'duplicate', message: 'Meeting with same meetingCode already exists' });
+        return result;
+      }
+    }
+
+    // Validate and insert
+    try {
+      ValidationEngine.validateOrThrow(mom);
+    } catch (vErr) {
+      result.errors.push({ code: 'validation', message: vErr.message });
+      return result;
+    }
+
+    var insertResult = InsertEngine.run(mom);
+    // InsertEngine.run is expected to return an object or row number; adapt
+    if (insertResult && typeof insertResult === 'object' && insertResult.row) {
+      result.insertedRow = insertResult.row;
+    } else if (typeof insertResult === 'number') {
+      result.insertedRow = insertResult;
+    }
+
+    result.success = true;
+    Logger.log('generateAndInsertFromNotes: success - meetingCode=' + result.meetingCode + ' row=' + result.insertedRow);
+    return result;
+  } catch (e) {
+    Logger.log('generateAndInsertFromNotes error: ' + (e && e.message ? e.message : e));
+    result.errors.push({ code: 'exception', message: e && e.message ? e.message : String(e) });
+    return result;
+  }
 }
