@@ -190,7 +190,6 @@
     reader.onload = function (e) {
       const dataUrl = e.target.result;
       const base64 = dataUrl.split(',')[1];
-      const mimeType = file.type || (dataUrl.split(',')[0].match(/data:([^;]+)/) || [])[1] || 'image/png';
       setStatus('Uploading image for OCR...');
       google.script.run
         .withSuccessHandler(onImageProcessResult)
@@ -198,7 +197,7 @@
           alert('Image processing failed: ' + err.message);
           setStatus('Failed');
         })
-        .processImageBase64(base64, file.name, mimeType);
+        .processImageBase64(base64, file.name);
     };
     reader.readAsDataURL(file);
   }
@@ -218,7 +217,7 @@
     lastImageAIText = result.aiText || null;
     // enable insert button if we have aiText
     document.getElementById('insertImageBtn').disabled = !lastImageAIText;
-    setStatus('Image processed (' + (result.ocrSource || 'unknown') + ' OCR)');
+    setStatus('Image processed');
   }
 
   function insertImageAI() {
