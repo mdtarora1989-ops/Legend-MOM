@@ -134,8 +134,10 @@ AIMapper.mapToMOM = function (ai) {
     MOMBuilder.addDiscussion(mom, d);
   });
 
-  // Do NOT auto-fill agenda from the first discussion.
-  // If agenda was not provided, leave it blank so the original notes/prompt are respected.
+  // Fallback: if agenda empty, use first discussion
+  if ((!mom.agenda || mom.agenda.trim() === '') && mom.discussion && mom.discussion.length > 0) {
+    mom.agenda = mom.discussion[0].slice(0, 200);
+  }
 
   return mom;
 };

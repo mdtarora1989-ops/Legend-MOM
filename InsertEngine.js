@@ -287,15 +287,17 @@ InsertEngine.writeHeaderData = function (mom, ctx) {
     rows.push(template.slice());
 
   }
+// Remove S.No. from every row before writing
+var outputRows = rows.map(function (r) {
+  return r.slice(1); // Skip first column (S.No.)
+});
 
-  ctx.sheet.getRange(
-
-      ctx.startRow,
-      1,
-      ctx.totalRows,
-      ctx.lastColumn
-
-  ).setValues(rows);
+ctx.sheet.getRange(
+    ctx.startRow,
+    2,
+    ctx.totalRows,
+    ctx.lastColumn - 1
+).setValues(outputRows);
 
 };
 

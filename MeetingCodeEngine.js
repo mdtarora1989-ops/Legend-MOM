@@ -60,26 +60,48 @@ MeetingCodeEngine.formatSequence = function (sequence) {
  */
 MeetingCodeEngine.generate = function () {
 
-  var sequence = ConfigService.getNumber("LAST_SEQUENCE", 0);
+  var sheet = SheetService.getSheet();
 
-  var meetingCode = "";
+  var meetingColumn = SheetService.column("MEETING_CODE");
 
-  do {
+  var lastRow = sheet.getLastRow();
 
-    sequence++;
+  var sequence = 0;
 
-    meetingCode =
-      CONFIG.MEETING_PREFIX +
-      "/" +
-      MeetingCodeEngine.getFinancialYear() +
-      "/" +
-      MeetingCodeEngine.formatSequence(sequence);
+  // Find the last non-empty Meeting Code
+  for (var row = lastRow; row >= CONFIG.FIRST_DATA_ROW; row--) {
 
-  } while (SheetService.meetingExists(meetingCode));
+    var code = String(
+      sheet.getRange(row, meetingColumn).getValue()
+    ).trim();
 
-  ConfigService.set("LAST_SEQUENCE", sequence);
+    if (code === "") {
+      continue;
+    }
 
-  return meetingCode;
+    var parts = code.split("/");
+
+    if (parts.length === 3) {
+
+      sequence = parseInt(parts[2], 10);
+
+      if (!isNaN(sequence)) {
+        break;
+      }
+
+    }
+
+  }
+
+  sequence++;
+
+  return (
+    CONFIG.MEETING_PREFIX +
+    "/" +
+    MeetingCodeEngine.getFinancialYear() +
+    "/" +
+    MeetingCodeEngine.formatSequence(sequence)
+  );
 
 };
 
