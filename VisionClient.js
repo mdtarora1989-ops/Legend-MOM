@@ -1,17 +1,24 @@
 /* VisionClient.js
  * Server-side handlers to process base64 images via Cloud Vision API,
  * then call the existing AI flow to parse extracted text into JSON.
+ *
+ * Added Drive OCR fallback for environments where Cloud Vision is unavailable
+ * or billing is not enabled. Drive OCR uses Drive -> Google Docs conversion
+ * and does not require Cloud Vision billing.
  */
 
 var VisionClient = (function () {
   function getApiKey() {
     var key = PropertiesService.getScriptProperties().getProperty('VISION_API_KEY');
-    if (!key) throw new Error('VISION_API_KEY not configured in Script Properties.');
+    if (!key) return null; // do not throw here so we can fallback to Drive OCR
     return key;
   }
 
   function callVision(base64) {
     var apiKey = getApiKey();
+    if (!apiKey) {
+      throw new Error('No VISION_API_KEY configured');
+    }
     var url = 'https://vision.googleapis.com/v1/images:annotate?key=' + encodeURIComponent(apiKey);
     var payload = {
       requests: [
@@ -43,6 +50,83 @@ var VisionClient = (function () {
       text = '';
     }
     return text;
+  }
+
+  // Drive OCR implementation (uses Drive upload + convert=true to create a Google Doc)
+  function normalizeMimeType(mimeType) {
+    mimeType = String(mimeType || '').trim();
+    return /^image\//i.test(mimeType) ? mimeType : 'image/png';
+  }
+
+  function processImageBase64_DriveOCR(base64, fileName, mimeType) {
+    base64 = String(base64 || '');
+    if (!base64) throw new Error('Empty image data');
+    mimeType = normalizeMimeType(mimeType);
+
+    var bytes = Utilities.base64Decode(base64);
+
+    var boundary = '-------314159265358979323846';
+    var delimiter = '\r\n--' + boundary + '\r\n';
+    var closeDelim = '\r\n--' + boundary + '--';
+
+    var metadata = {
+      title: fileName || ('upload-' + new Date().getTime() + '.png'),
+      mimeType: mimeType
+    };
+
+    var multipartRequestBody =
+      delimiter +
+      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+      JSON.stringify(metadata) +
+      delimiter +
+      'Content-Type: ' + mimeType + '\r\n' +
+      'Content-Transfer-Encoding: base64\r\n' +
+      '\r\n' +
+      Utilities.base64Encode(bytes) +
+      closeDelim;
+
+    var url = 'https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart&ocr=true&ocrLanguage=en&convert=true';
+
+    var options = {
+      method: 'post',
+      contentType: 'multipart/related; boundary=' + boundary,
+      headers: {
+        Authorization: 'Bearer ' + ScriptApp.getOAuthToken()
+      },
+      payload: multipartRequestBody,
+      muteHttpExceptions: true
+    };
+
+    var res = UrlFetchApp.fetch(url, options);
+    var code = res.getResponseCode();
+    var body = res.getContentText();
+
+    if (code >= 400) {
+      throw new Error('Drive OCR failed: HTTP ' + code + ' - ' + body);
+    }
+
+    var data;
+    try {
+      data = JSON.parse(body);
+    } catch (e) {
+      throw new Error('Drive OCR: invalid JSON response: ' + e.message);
+    }
+
+    var docId = data.id;
+    if (!docId) {
+      throw new Error('Drive OCR produced no document id.');
+    }
+
+    try {
+      var doc = DocumentApp.openById(docId);
+      return doc.getBody().getText() || '';
+    } catch (e) {
+      throw new Error('Failed to open OCR doc: ' + e.message);
+    } finally {
+      try {
+        DriveApp.getFileById(docId).setTrashed(true);
+      } catch (ignore) {}
+    }
   }
 
   // Extract candidate text from OpenAI-like responses (same logic as AIController)
@@ -88,24 +172,42 @@ var VisionClient = (function () {
   }
 
   // Process base64 -> OCR -> AI parse (return ocrText, aiText, aiJson)
-  function processImageBase64(base64, fileName) {
+  function processImageBase64(base64, fileName, mimeType) {
     base64 = String(base64 || '');
     if (!base64) throw new Error('Empty image data');
 
     // 1) Call Vision API
     var ocrText = '';
+    var used = 'none';
+
+    // Try Vision API if API key configured
     try {
-      ocrText = callVision(base64) || '';
+      if (getApiKey()) {
+        try {
+          ocrText = callVision(base64) || '';
+          used = 'vision';
+        } catch (e) {
+          Logger.log('Vision API failed, falling back to Drive OCR: ' + e.message);
+          // continue to Drive OCR
+        }
+      }
     } catch (e) {
-      throw new Error('Vision OCR failed: ' + e.message);
+      // continue to Drive OCR
+      Logger.log('Error checking Vision API key: ' + e.message);
     }
 
-    // 2) Build prompt and call AI (reuse PromptEngine + AIFormatter)
+    if (!ocrText) {
+      // Use Drive OCR fallback
+      ocrText = processImageBase64_DriveOCR(base64, fileName, mimeType) || '';
+      used = 'drive';
+    }
+
+    // Build prompt and call AI (reuse PromptEngine + AIFormatter)
     var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, ocrText || '', {});
     var aiResponse = AIFormatter.callOpenAI(prompt);
     var aiText = extractCandidateText(aiResponse) || '';
 
-    // 3) Validate AI JSON
+    // Validate AI JSON
     var validation = validateAIResponse(aiText);
 
     return {
