@@ -1,6 +1,7 @@
 <script>
   let generatedPrompt = "";
   let validatedJSON = null;
+  let lastImageAIText = null;
 
   /*************************************************
    * Status
@@ -176,12 +177,83 @@
   }
 
   /*************************************************
+   * IMAGE UPLOAD HANDLERS
+   *************************************************/
+  function processImageUpload() {
+    const input = document.getElementById('imageFile');
+    if (!input || !input.files || input.files.length === 0) {
+      alert('Please select an image file first.');
+      return;
+    }
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const dataUrl = e.target.result;
+      const base64 = dataUrl.split(',')[1];
+      const mimeType = file.type || (dataUrl.split(',')[0].match(/data:([^;]+)/) || [])[1] || 'image/png';
+      setStatus('Uploading image for OCR...');
+      google.script.run
+        .withSuccessHandler(onImageProcessResult)
+        .withFailureHandler(function (err) {
+          alert('Image processing failed: ' + err.message);
+          setStatus('Failed');
+        })
+        .processImageBase64(base64, file.name, mimeType);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function onImageProcessResult(result) {
+    // result: { ocrText, aiText, aiJson }
+    if (!result) {
+      alert('No result returned from image processing.');
+      setStatus('Failed');
+      return;
+    }
+    document.getElementById('ocrText').textContent = result.ocrText || '';
+    if (result.aiJson) {
+      document.getElementById('previewCard').style.display = 'block';
+      document.getElementById('previewArea').textContent = JSON.stringify(result.aiJson, null, 2);
+    }
+    lastImageAIText = result.aiText || null;
+    // enable insert button if we have aiText
+    document.getElementById('insertImageBtn').disabled = !lastImageAIText;
+    setStatus('Image processed (' + (result.ocrSource || 'unknown') + ' OCR)');
+  }
+
+  function insertImageAI() {
+    if (!lastImageAIText) {
+      alert('No AI data to insert. Process an image first.');
+      return;
+    }
+    setStatus('Inserting AI result...');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.success) {
+          alert('Meeting Created: ' + res.meetingCode);
+          setStatus('Completed');
+          resetWorkspace();
+        } else {
+          alert('Insert failed: ' + (res && res.message ? res.message : 'Unknown'));
+          setStatus('Insert Failed');
+        }
+      })
+      .withFailureHandler(function (err) {
+        alert('Insert failed: ' + err.message);
+        setStatus('Insert Failed');
+      })
+      .insertValidatedResponse(lastImageAIText);
+  }
+
+  /*************************************************
    * Reset
    *************************************************/
   function resetWorkspace() {
     generatedPrompt = "";
 
     validatedJSON = null;
+
+    lastImageAIText = null;
 
     document.getElementById("notes").value = "";
 
@@ -191,11 +263,15 @@
 
     document.getElementById("previewArea").textContent = "";
 
+    document.getElementById("ocrText").textContent = "";
+
     document.getElementById("promptCard").style.display = "none";
 
     document.getElementById("responseCard").style.display = "none";
 
     document.getElementById("previewCard").style.display = "none";
+
+    document.getElementById('insertImageBtn').disabled = true;
 
     setStatus("Ready");
   }
