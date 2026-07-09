@@ -152,7 +152,8 @@ var VisionClient = (function () {
     };
   }
 
-  // Process multiple images: concatenate OCR text from all pages
+  // Process multiple images: ONLY extract OCR text, NO AI parsing
+  // This allows users to review OCR before committing to AI parsing
   function processMultipleImagesBase64(imageList) {
     var allOcrText = '';
 
@@ -165,23 +166,17 @@ var VisionClient = (function () {
       }
     }
 
-    // Build prompt and call AI on combined OCR text
-    var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, allOcrText || '', {});
-    var aiResponse = AIFormatter.callOpenAI(prompt);
-    var aiText = extractCandidateText(aiResponse) || '';
-
-    var validation = validateAIResponse(aiText);
-
+    // Return OCR text only (no AI parsing)
     return {
       ocrText: allOcrText,
-      aiText: aiText,
-      aiJson: validation.success ? validation.data : null,
-      validation: validation,
+      aiText: null,
+      aiJson: null,
+      validation: null,
       ocrSource: 'drive'
     };
   }
 
-  // Parse OCR text to JSON (called by Tesseract fallback from client)
+  // Parse OCR text to JSON (called by Tesseract fallback from client or manual flow)
   function parseOcrTextToJson(ocrText) {
     ocrText = String(ocrText || '');
     if (!ocrText) throw new Error('Empty OCR text');
@@ -197,7 +192,7 @@ var VisionClient = (function () {
       aiText: aiText,
       aiJson: validation.success ? validation.data : null,
       validation: validation,
-      ocrSource: 'tesseract.js (client-side)'
+      ocrSource: 'drive'
     };
   }
 
