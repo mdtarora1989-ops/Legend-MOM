@@ -53,9 +53,15 @@ var VisionClient = (function () {
   }
 
   // Drive OCR implementation (uses Drive upload + convert=true to create a Google Doc)
-  function processImageBase64_DriveOCR(base64, fileName) {
+  function normalizeMimeType(mimeType) {
+    mimeType = String(mimeType || '').trim();
+    return /^image\//i.test(mimeType) ? mimeType : 'image/png';
+  }
+
+  function processImageBase64_DriveOCR(base64, fileName, mimeType) {
     base64 = String(base64 || '');
     if (!base64) throw new Error('Empty image data');
+    mimeType = normalizeMimeType(mimeType);
 
     var bytes = Utilities.base64Decode(base64);
 
@@ -65,7 +71,7 @@ var VisionClient = (function () {
 
     var metadata = {
       title: fileName || ('upload-' + new Date().getTime() + '.png'),
-      mimeType: 'image/png'
+      mimeType: mimeType
     };
 
     var multipartRequestBody =
@@ -73,7 +79,7 @@ var VisionClient = (function () {
       'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
       JSON.stringify(metadata) +
       delimiter +
-      'Content-Type: image/png\r\n' +
+      'Content-Type: ' + mimeType + '\r\n' +
       'Content-Transfer-Encoding: base64\r\n' +
       '\r\n' +
       Utilities.base64Encode(bytes) +
@@ -113,14 +119,13 @@ var VisionClient = (function () {
 
     try {
       var doc = DocumentApp.openById(docId);
-      var text = doc.getBody().getText() || '';
-      // Trash the temporary doc to avoid clutter
+      return doc.getBody().getText() || '';
+    } catch (e) {
+      throw new Error('Failed to open OCR doc: ' + e.message);
+    } finally {
       try {
         DriveApp.getFileById(docId).setTrashed(true);
       } catch (ignore) {}
-      return text;
-    } catch (e) {
-      throw new Error('Failed to open OCR doc: ' + e.message);
     }
   }
 
@@ -167,7 +172,7 @@ var VisionClient = (function () {
   }
 
   // Process base64 -> OCR -> AI parse (return ocrText, aiText, aiJson)
-  function processImageBase64(base64, fileName) {
+  function processImageBase64(base64, fileName, mimeType) {
     base64 = String(base64 || '');
     if (!base64) throw new Error('Empty image data');
 
@@ -192,7 +197,7 @@ var VisionClient = (function () {
 
     if (!ocrText) {
       // Use Drive OCR fallback
-      ocrText = processImageBase64_DriveOCR(base64, fileName) || '';
+      ocrText = processImageBase64_DriveOCR(base64, fileName, mimeType) || '';
       used = 'drive';
     }
 
@@ -220,6 +225,6 @@ var VisionClient = (function () {
 })();
 
 // Expose top-level function for google.script.run
-function processImageBase64(base64, fileName) {
-  return VisionClient.processImageBase64(base64, fileName);
+function processImageBase64(base64, fileName, mimeType) {
+  return VisionClient.processImageBase64(base64, fileName, mimeType);
 }
