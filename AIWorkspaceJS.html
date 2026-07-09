@@ -177,52 +177,112 @@
   }
 
   /*************************************************
-   * IMAGE UPLOAD HANDLERS
+   * IMAGE UPLOAD HANDLERS (Multi-page support)
    *************************************************/
   function processImageUpload() {
     const input = document.getElementById('imageFile');
     if (!input || !input.files || input.files.length === 0) {
-      alert('Please select an image file first.');
+      alert('Please select one or more image files.');
       return;
     }
-    const file = input.files[0];
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      const dataUrl = e.target.result;
-      const base64 = dataUrl.split(',')[1];
-      setStatus('Uploading image for OCR...');
-      google.script.run
-        .withSuccessHandler(onImageProcessResult)
-        .withFailureHandler(function (err) {
+
+    const files = Array.from(input.files);
+    setStatus('Processing ' + files.length + ' image(s) for OCR...');
+
+    // Read all files as base64 and process them
+    let allBase64 = [];
+    let filesProcessed = 0;
+
+    files.forEach((file, idx) => {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const dataUrl = e.target.result;
+        const base64 = dataUrl.split(',')[1];
+        allBase64.push({ base64: base64, name: file.name, index: idx });
+        filesProcessed++;
+
+        if (filesProcessed === files.length) {
+          // All files read, now process them on the server
+          processMultipleImages(allBase64);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function processMultipleImages(imageList) {
+    setStatus('Uploading and processing ' + imageList.length + ' images...');
+
+    google.script.run
+      .withSuccessHandler(onImageProcessResult)
+      .withFailureHandler(function (err) {
+        // Try Tesseract.js fallback if server OCR fails (e.g., rate limit)
+        if (err.message && err.message.includes('rate limit')) {
+          setStatus('Server rate limited. Using client-side OCR...');
+          processTesseractFallback(imageList);
+        } else {
           alert('Image processing failed: ' + err.message);
           setStatus('Failed');
-        })
-        .processImageBase64(base64, file.name);
-    };
-    reader.readAsDataURL(file);
+        }
+      })
+      .processMultipleImagesBase64(imageList);
   }
 
   function onImageProcessResult(result) {
-    // result: { ocrText, aiText, aiJson }
+    // result: { ocrText, aiText, aiJson, ocrSource }
     if (!result) {
       alert('No result returned from image processing.');
       setStatus('Failed');
       return;
     }
     document.getElementById('ocrText').textContent = result.ocrText || '';
+    document.getElementById('ocrSource').textContent = 'OCR source: ' + (result.ocrSource || 'unknown');
+
     if (result.aiJson) {
       document.getElementById('previewCard').style.display = 'block';
       document.getElementById('previewArea').textContent = JSON.stringify(result.aiJson, null, 2);
     }
     lastImageAIText = result.aiText || null;
-    // enable insert button if we have aiText
     document.getElementById('insertImageBtn').disabled = !lastImageAIText;
-    setStatus('Image processed');
+    setStatus('Image(s) processed');
+  }
+
+  // Tesseract.js fallback for client-side OCR
+  async function processTesseractFallback(imageList) {
+    try {
+      const { createWorker } = Tesseract;
+      const worker = await createWorker('eng');
+      let combinedOcrText = '';
+
+      for (const img of imageList) {
+        setStatus('OCR page ' + (img.index + 1) + ' of ' + imageList.length + '...');
+        const result = await worker.recognize('data:image/png;base64,' + img.base64);
+        combinedOcrText += result.data.text + '\n---PAGE BREAK---\n';
+      }
+
+      await worker.terminate();
+
+      document.getElementById('ocrText').textContent = combinedOcrText;
+      document.getElementById('ocrSource').textContent = 'OCR source: tesseract.js (client-side)';
+
+      // Call AI parsing on the combined text
+      setStatus('Parsing with AI...');
+      google.script.run
+        .withSuccessHandler(onImageProcessResult)
+        .withFailureHandler(function (err) {
+          alert('AI parsing failed: ' + err.message);
+          setStatus('AI parsing failed');
+        })
+        .parseOcrTextToJson(combinedOcrText);
+    } catch (err) {
+      alert('Tesseract OCR failed: ' + err.message);
+      setStatus('Failed');
+    }
   }
 
   function insertImageAI() {
     if (!lastImageAIText) {
-      alert('No AI data to insert. Process an image first.');
+      alert('No AI data to insert. Process image(s) first.');
       return;
     }
     setStatus('Inserting AI result...');
@@ -263,6 +323,10 @@
     document.getElementById("previewArea").textContent = "";
 
     document.getElementById("ocrText").textContent = "";
+
+    document.getElementById("ocrSource").textContent = "";
+
+    document.getElementById("imageFile").value = "";
 
     document.getElementById("promptCard").style.display = "none";
 

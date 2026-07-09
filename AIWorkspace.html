@@ -4,6 +4,8 @@
     <base target="_top" />
 
     <?!= include('AIWorkspaceCSS'); ?>
+    <!-- Tesseract.js for client-side OCR fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   </head>
 
   <body>
@@ -77,15 +79,17 @@
         <!-- IMAGE UPLOAD -->
         <div class="card" id="imageCard">
           <h2>Image Upload (OCR → AI)</h2>
+          <p style="font-size: 0.9em; color: #666;">Select one or more images from a multi-page meeting</p>
 
-          <input type="file" id="imageFile" accept="image/*" />
+          <input type="file" id="imageFile" accept="image/*" multiple />
           <div style="margin-top:8px">
-            <button class="secondary" onclick="processImageUpload()">Process Image</button>
+            <button class="secondary" onclick="processImageUpload()">Process Images</button>
             <button class="secondary" id="insertImageBtn" onclick="insertImageAI()" disabled>Insert AI Result</button>
           </div>
 
           <h4>OCR Text</h4>
           <pre id="ocrText" style="max-height:200px; overflow:auto; background:#f7f7f7; padding:8px; border-radius:4px;"></pre>
+          <p id="ocrSource" style="font-size: 0.85em; color: #999; margin-top: 4px;"></p>
 
         </div>
 

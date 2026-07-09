@@ -1,67 +1,19 @@
 /* VisionClient.js
- * Server-side handlers to process base64 images via Cloud Vision API,
- * then call the existing AI flow to parse extracted text into JSON.
+ * Server-side handlers to process base64 images using Drive OCR only (no Cloud Vision).
  *
- * Added Drive OCR fallback for environments where Cloud Vision is unavailable
- * or billing is not enabled. Drive OCR uses Drive -> Google Docs conversion
- * and does not require Cloud Vision billing.
+ * This version forces Drive OCR by uploading the image to Drive with convert=true
+ * which creates a Google Doc; the script reads the doc text and trashes the doc.
+ * The AI parsing reuses existing PromptEngine + AIFormatter.
+ *
+ * Added support for multiple images (concatenate OCR text) and Tesseract.js client-side
+ * fallback when Drive OCR hits rate limits.
  */
 
 var VisionClient = (function () {
-  function getApiKey() {
-    var key = PropertiesService.getScriptProperties().getProperty('VISION_API_KEY');
-    if (!key) return null; // do not throw here so we can fallback to Drive OCR
-    return key;
-  }
-
-  function callVision(base64) {
-    var apiKey = getApiKey();
-    if (!apiKey) {
-      throw new Error('No VISION_API_KEY configured');
-    }
-    var url = 'https://vision.googleapis.com/v1/images:annotate?key=' + encodeURIComponent(apiKey);
-    var payload = {
-      requests: [
-        {
-          image: { content: base64 },
-          features: [ { type: 'DOCUMENT_TEXT_DETECTION', maxResults: 1 } ]
-        }
-      ]
-    };
-    var options = {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    };
-    var res = UrlFetchApp.fetch(url, options);
-    var code = res.getResponseCode();
-    var body = res.getContentText();
-    if (code >= 400) {
-      throw new Error('Vision API error: ' + body);
-    }
-    var data = JSON.parse(body);
-    var text = '';
-    try {
-      if (data.responses && data.responses[0]) {
-        text = (data.responses[0].fullTextAnnotation && data.responses[0].fullTextAnnotation.text) || (data.responses[0].textAnnotations && data.responses[0].textAnnotations[0] && data.responses[0].textAnnotations[0].description) || '';
-      }
-    } catch (e) {
-      text = '';
-    }
-    return text;
-  }
-
   // Drive OCR implementation (uses Drive upload + convert=true to create a Google Doc)
-  function normalizeMimeType(mimeType) {
-    mimeType = String(mimeType || '').trim();
-    return /^image\//i.test(mimeType) ? mimeType : 'image/png';
-  }
-
-  function processImageBase64_DriveOCR(base64, fileName, mimeType) {
+  function processImageBase64_DriveOCR(base64, fileName) {
     base64 = String(base64 || '');
     if (!base64) throw new Error('Empty image data');
-    mimeType = normalizeMimeType(mimeType);
 
     var bytes = Utilities.base64Decode(base64);
 
@@ -71,7 +23,7 @@ var VisionClient = (function () {
 
     var metadata = {
       title: fileName || ('upload-' + new Date().getTime() + '.png'),
-      mimeType: mimeType
+      mimeType: 'image/png'
     };
 
     var multipartRequestBody =
@@ -79,7 +31,7 @@ var VisionClient = (function () {
       'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
       JSON.stringify(metadata) +
       delimiter +
-      'Content-Type: ' + mimeType + '\r\n' +
+      'Content-Type: image/png\r\n' +
       'Content-Transfer-Encoding: base64\r\n' +
       '\r\n' +
       Utilities.base64Encode(bytes) +
@@ -119,13 +71,14 @@ var VisionClient = (function () {
 
     try {
       var doc = DocumentApp.openById(docId);
-      return doc.getBody().getText() || '';
-    } catch (e) {
-      throw new Error('Failed to open OCR doc: ' + e.message);
-    } finally {
+      var text = doc.getBody().getText() || '';
+      // Trash the temporary doc to avoid clutter
       try {
         DriveApp.getFileById(docId).setTrashed(true);
       } catch (ignore) {}
+      return text;
+    } catch (e) {
+      throw new Error('Failed to open OCR doc: ' + e.message);
     }
   }
 
@@ -171,36 +124,16 @@ var VisionClient = (function () {
     return candidateText;
   }
 
-  // Process base64 -> OCR -> AI parse (return ocrText, aiText, aiJson)
-  function processImageBase64(base64, fileName, mimeType) {
+  // Drive-only process: base64 -> Drive OCR -> AI parse -> validate
+  function processImageBase64(base64, fileName) {
     base64 = String(base64 || '');
     if (!base64) throw new Error('Empty image data');
 
-    // 1) Call Vision API
     var ocrText = '';
-    var used = 'none';
+    var used = 'drive';
 
-    // Try Vision API if API key configured
-    try {
-      if (getApiKey()) {
-        try {
-          ocrText = callVision(base64) || '';
-          used = 'vision';
-        } catch (e) {
-          Logger.log('Vision API failed, falling back to Drive OCR: ' + e.message);
-          // continue to Drive OCR
-        }
-      }
-    } catch (e) {
-      // continue to Drive OCR
-      Logger.log('Error checking Vision API key: ' + e.message);
-    }
-
-    if (!ocrText) {
-      // Use Drive OCR fallback
-      ocrText = processImageBase64_DriveOCR(base64, fileName, mimeType) || '';
-      used = 'drive';
-    }
+    // Force Drive OCR
+    ocrText = processImageBase64_DriveOCR(base64, fileName) || '';
 
     // Build prompt and call AI (reuse PromptEngine + AIFormatter)
     var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, ocrText || '', {});
@@ -214,16 +147,77 @@ var VisionClient = (function () {
       ocrText: ocrText,
       aiText: aiText,
       aiJson: validation.success ? validation.data : null,
-      validation: validation
+      validation: validation,
+      ocrSource: used
+    };
+  }
+
+  // Process multiple images: concatenate OCR text from all pages
+  function processMultipleImagesBase64(imageList) {
+    var allOcrText = '';
+
+    for (var i = 0; i < imageList.length; i++) {
+      var img = imageList[i];
+      var pageOcr = processImageBase64_DriveOCR(img.base64, img.name) || '';
+      allOcrText += pageOcr;
+      if (i < imageList.length - 1) {
+        allOcrText += '\n---PAGE ' + (i + 1) + '---\n';
+      }
+    }
+
+    // Build prompt and call AI on combined OCR text
+    var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, allOcrText || '', {});
+    var aiResponse = AIFormatter.callOpenAI(prompt);
+    var aiText = extractCandidateText(aiResponse) || '';
+
+    var validation = validateAIResponse(aiText);
+
+    return {
+      ocrText: allOcrText,
+      aiText: aiText,
+      aiJson: validation.success ? validation.data : null,
+      validation: validation,
+      ocrSource: 'drive'
+    };
+  }
+
+  // Parse OCR text to JSON (called by Tesseract fallback from client)
+  function parseOcrTextToJson(ocrText) {
+    ocrText = String(ocrText || '');
+    if (!ocrText) throw new Error('Empty OCR text');
+
+    var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, ocrText, {});
+    var aiResponse = AIFormatter.callOpenAI(prompt);
+    var aiText = extractCandidateText(aiResponse) || '';
+
+    var validation = validateAIResponse(aiText);
+
+    return {
+      ocrText: ocrText,
+      aiText: aiText,
+      aiJson: validation.success ? validation.data : null,
+      validation: validation,
+      ocrSource: 'tesseract.js (client-side)'
     };
   }
 
   return {
-    processImageBase64: processImageBase64
+    processImageBase64: processImageBase64,
+    processImageBase64_DriveOCR: processImageBase64_DriveOCR,
+    processMultipleImagesBase64: processMultipleImagesBase64,
+    parseOcrTextToJson: parseOcrTextToJson
   };
 })();
 
-// Expose top-level function for google.script.run
+// Expose top-level functions for google.script.run
 function processImageBase64(base64, fileName) {
   return VisionClient.processImageBase64(base64, fileName);
+}
+
+function processMultipleImagesBase64(imageList) {
+  return VisionClient.processMultipleImagesBase64(imageList);
+}
+
+function parseOcrTextToJson(ocrText) {
+  return VisionClient.parseOcrTextToJson(ocrText);
 }
