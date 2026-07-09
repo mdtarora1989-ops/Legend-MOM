@@ -74,6 +74,21 @@
           </button>
         </div>
 
+        <!-- IMAGE UPLOAD -->
+        <div class="card" id="imageCard">
+          <h2>Image Upload (OCR → AI)</h2>
+
+          <input type="file" id="imageFile" accept="image/*" />
+          <div style="margin-top:8px">
+            <button class="secondary" onclick="processImageUpload()">Process Image</button>
+            <button class="secondary" id="insertImageBtn" onclick="insertImageAI()" disabled>Insert AI Result</button>
+          </div>
+
+          <h4>OCR Text</h4>
+          <pre id="ocrText" style="max-height:200px; overflow:auto; background:#f7f7f7; padding:8px; border-radius:4px;"></pre>
+
+        </div>
+
         <!-- STEP 2 -->
 
         <div class="card" id="promptCard" style="display: none">
