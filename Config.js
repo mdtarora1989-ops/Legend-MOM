@@ -56,7 +56,7 @@ const CONFIG = Object.freeze({
   //==============================================================
   HEADERS: Object.freeze({
 
-    SERIAL: "S. No",
+    SERIAL: "S.No.",
 
     DATE: "Date",
 
