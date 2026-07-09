@@ -12,6 +12,20 @@
   }
 
   /*************************************************
+   * Common OCR Error Fixes
+   *************************************************/
+  function fixCommonOcrErrors(text) {
+    // Fix common OCR character confusions
+    text = text.replace(/\|/g, 'l');           // | -> l (pipe to letter L)
+    text = text.replace(/\b0+\b/g, 'O');      // standalone 0 -> O
+    text = text.replace(/S([A-Z])/g, '5$1');  // S followed by uppercase -> 5 (in some contexts)
+    text = text.replace(/rn/g, 'm');          // rn -> m (common confusion)
+    text = text.replace(/\s+/g, ' ');         // multiple spaces -> single space
+    text = text.replace(/([a-z])([A-Z])/g, '$1 $2'); // missing space between words
+    return text;
+  }
+
+  /*************************************************
    * Generate Prompt
    *************************************************/
   function generatePrompt() {
@@ -244,8 +258,9 @@
     document.getElementById('ocrText').textContent = result.ocrText || '';
     document.getElementById('ocrSource').textContent = 'OCR source: ' + (result.ocrSource || 'unknown');
 
-    // Auto-load clean OCR text (without page markers) into notes textarea
+    // Auto-load clean OCR text (without page markers, with common errors fixed) into notes textarea
     var cleanOcrText = (result.ocrText || '').replace(/---PAGE \d+---/g, '\n').trim();
+    cleanOcrText = fixCommonOcrErrors(cleanOcrText);
     document.getElementById('notes').value = cleanOcrText;
 
     if (result.aiJson) {
@@ -253,7 +268,7 @@
       document.getElementById('previewArea').textContent = JSON.stringify(result.aiJson, null, 2);
     }
     lastImageAIText = result.aiText || null;
-    setStatus('OCR loaded into notes. Ready to generate prompt.');
+    setStatus('OCR loaded and cleaned. Ready to review and generate prompt.');
   }
 
   // Tesseract.js fallback for client-side OCR
@@ -275,11 +290,12 @@
       document.getElementById('ocrText').textContent = combinedOcrText;
       document.getElementById('ocrSource').textContent = 'OCR source: tesseract.js (client-side)';
 
-      // Auto-load clean OCR text (without page markers) into notes textarea
+      // Auto-load clean OCR text (without page markers, with common errors fixed) into notes textarea
       var cleanOcrText = combinedOcrText.replace(/---PAGE BREAK---/g, '\n').trim();
+      cleanOcrText = fixCommonOcrErrors(cleanOcrText);
       document.getElementById('notes').value = cleanOcrText;
       
-      setStatus('OCR loaded into notes. Ready to generate prompt.');
+      setStatus('OCR loaded and cleaned. Ready to review and generate prompt.');
     } catch (err) {
       alert('Tesseract OCR failed: ' + err.message);
       setStatus('Failed');
