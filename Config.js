@@ -1,9 +1,6 @@
 /**********************************************************************
  * Legend MOM Management System
- * ------------------------------------------------------------
- * Version : 2.0 Professional
- * Module  : Config.gs
- * Purpose : Global Configuration
+ * Config.js - Global Configuration + Gemini/OpenAI Provider Selection
  **********************************************************************/
 
 const CONFIG = Object.freeze({
@@ -23,6 +20,12 @@ const CONFIG = Object.freeze({
   HEADER_ROW: 1,
 
   FIRST_DATA_ROW: 2,
+
+  //==============================================================
+  // AI PROVIDER (OpenAI or Gemini)
+  //==============================================================
+
+  DEFAULT_AI_PROVIDER: "gemini", // "openai" or "gemini"
 
   //==============================================================
   // MENU
@@ -52,7 +55,6 @@ const CONFIG = Object.freeze({
 
   //==============================================================
   // SHEET HEADERS
-  // (Use the actual long header strings if desired)
   //==============================================================
   HEADERS: Object.freeze({
 
@@ -84,16 +86,34 @@ const CONFIG = Object.freeze({
 
 });
 
-/**********************************************************************
+/**
+ * Get AI Provider from Script Properties (with fallback to default)
+ */
+function getAIProvider() {
+  const provider = PropertiesService.getScriptProperties().getProperty("AI_PROVIDER");
+  return provider || CONFIG.DEFAULT_AI_PROVIDER;
+}
+
+/**
+ * Set AI Provider in Script Properties
+ */
+function setAIProvider(provider) {
+  if (!['openai', 'gemini'].includes(provider)) {
+    throw new Error("Invalid AI provider: " + provider);
+  }
+  PropertiesService.getScriptProperties().setProperty("AI_PROVIDER", provider);
+}
+
+/**
  * Returns active spreadsheet
- **********************************************************************/
+ */
 function getSpreadsheet() {
   return SpreadsheetApp.getActiveSpreadsheet();
 }
 
-/**********************************************************************
+/**
  * Returns MOM sheet
- **********************************************************************/
+ */
 function getMomSheet() {
   const sheet = getSpreadsheet().getSheetByName(CONFIG.SHEET_NAME);
   if (!sheet) {
@@ -102,21 +122,20 @@ function getMomSheet() {
   return sheet;
 }
 
-/**********************************************************************
+/**
  * Reads header row
- **********************************************************************/
+ */
 function getHeaderRow() {
   const sheet = getMomSheet();
   const lastColumn = sheet.getLastColumn();
-  // Read the header row across the current lastColumn
   return sheet
     .getRange(CONFIG.HEADER_ROW, 1, 1, lastColumn)
     .getValues()[0];
 }
 
-/**********************************************************************
+/**
  * Header normalization helper
- **********************************************************************/
+ */
 function normalizeHeaderText(s) {
   return String(s || "")
     .replace(/\u00A0/g, " ") // NBSP -> space
@@ -125,22 +144,14 @@ function normalizeHeaderText(s) {
     .toLowerCase();
 }
 
-/**********************************************************************
+/**
  * Builds dynamic column map — tolerant matching
- *
- * Returns a map of CONFIG header keys to 1-based column numbers:
- * {
- *   DATE: 2,
- *   START_TIME: 3
- * }
- **********************************************************************/
+ */
 function getColumnMap() {
   const headers = getHeaderRow();
   const map = {};
-  // Normalize the sheet headers
   const normalizedHeaders = headers.map(h => normalizeHeaderText(h));
 
-  // Build reverse lookup: normalized header -> index (1-based)
   const headerIndex = {};
   for (let i = 0; i < normalizedHeaders.length; i++) {
     headerIndex[normalizedHeaders[i]] = i + 1;
@@ -152,13 +163,11 @@ function getColumnMap() {
     const expected = CONFIG.HEADERS[key];
     const normExpected = normalizeHeaderText(expected);
 
-    // Exact normalized match
     if (normExpected in headerIndex) {
       map[key] = headerIndex[normExpected];
       return;
     }
 
-    // Soft-match: all words of expected appear in a sheet header
     const expectedWords = normExpected.split(" ").filter(Boolean);
     let foundIndex = -1;
     for (let i = 0; i < normalizedHeaders.length; i++) {
@@ -186,7 +195,6 @@ function getColumnMap() {
   });
 
   if (notFound.length > 0) {
-    // Helpful error message showing what's missing and what sheet headers are
     let msg = "Some required columns not found in sheet header row:\n";
     notFound.forEach(function (it) {
       msg += "- " + it.key + " expected header: '" + it.expected + "'\n";
@@ -201,9 +209,9 @@ function getColumnMap() {
   return map;
 }
 
-/**********************************************************************
+/**
  * Returns column number
- **********************************************************************/
+ */
 function getColumn(name) {
   const map = getColumnMap();
   if (!(name in map)) {
@@ -212,9 +220,9 @@ function getColumn(name) {
   return map[name];
 }
 
-/**********************************************************************
+/**
  * Returns application information
- **********************************************************************/
+ */
 function getAppInfo() {
   return {
     app: CONFIG.APP_NAME,
@@ -224,9 +232,9 @@ function getAppInfo() {
   };
 }
 
-/**********************************************************************
+/**
  * Health Check
- **********************************************************************/
+ */
 function configHealthCheck(){
   const info = getAppInfo();
   Logger.log("======================================");
@@ -234,6 +242,7 @@ function configHealthCheck(){
   Logger.log("Version : " + info.version);
   Logger.log("Company : " + info.company);
   Logger.log("Sheet : " + info.sheet);
+  Logger.log("AI Provider : " + getAIProvider());
   Logger.log("======================================");
 
   const map = getColumnMap();

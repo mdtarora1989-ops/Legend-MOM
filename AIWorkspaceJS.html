@@ -12,14 +12,36 @@
   }
 
   /*************************************************
+   * AI Provider Selector
+   *************************************************/
+  function switchAIProvider() {
+    const provider = document.getElementById("aiProviderSelector").value;
+    google.script.run
+      .withSuccessHandler(function () {
+        setStatus("AI Provider switched to: " + provider);
+      })
+      .withFailureHandler(function (err) {
+        alert("Failed to switch provider: " + err.message);
+      })
+      .setAIProvider(provider);
+  }
+
+  function loadAIProvider() {
+    google.script.run
+      .withSuccessHandler(function (provider) {
+        document.getElementById("aiProviderSelector").value = provider;
+      })
+      .getAIProvider();
+  }
+
+  /*************************************************
    * Common OCR Error Fixes
    *************************************************/
   function fixCommonOcrErrors(text) {
-    // Fix common OCR character confusions
-    text = text.replace(/\|/g, 'l');           // | -> l (pipe to letter L)
+    text = text.replace(/\|/g, 'l');           // | -> l
     text = text.replace(/\b0+\b/g, 'O');      // standalone 0 -> O
-    text = text.replace(/S([A-Z])/g, '5$1');  // S followed by uppercase -> 5 (in some contexts)
-    text = text.replace(/rn/g, 'm');          // rn -> m (common confusion)
+    text = text.replace(/S([A-Z])/g, '5$1');  // S followed by uppercase -> 5
+    text = text.replace(/rn/g, 'm');          // rn -> m
     text = text.replace(/\s+/g, ' ');         // multiple spaces -> single space
     text = text.replace(/([a-z])([A-Z])/g, '$1 $2'); // missing space between words
     return text;
@@ -33,32 +55,23 @@
 
     if (notes === "") {
       alert("Please enter meeting notes.");
-
       return;
     }
 
     setStatus("Generating AI Prompt...");
 
     google.script.run
-
       .withSuccessHandler(function (prompt) {
         generatedPrompt = prompt;
-
         document.getElementById("promptBox").value = prompt;
-
         document.getElementById("promptCard").style.display = "block";
-
         document.getElementById("responseCard").style.display = "block";
-
         setStatus("Prompt Ready");
       })
-
       .withFailureHandler(function (error) {
         setStatus("Failed");
-
         alert(error.message);
       })
-
       .generatePrompt(notes);
   }
 
@@ -98,12 +111,10 @@
   function copyPrompt() {
     if (generatedPrompt === "") {
       alert("Generate prompt first.");
-
       return;
     }
 
     navigator.clipboard.writeText(generatedPrompt);
-
     setStatus("Prompt copied to clipboard.");
   }
 
@@ -115,42 +126,32 @@
 
     if (response === "") {
       alert("Paste ChatGPT response first.");
-
       return;
     }
 
     setStatus("Validating...");
 
     google.script.run
-
       .withSuccessHandler(function (result) {
         if (!result.success) {
           alert(result.message);
-
           setStatus("Validation Failed");
-
           return;
         }
 
         validatedJSON = result.data;
-
         document.getElementById("previewCard").style.display = "block";
-
         document.getElementById("previewArea").textContent = JSON.stringify(
           result.data,
           null,
           2,
         );
-
         setStatus("JSON Valid");
       })
-
       .withFailureHandler(function (err) {
         alert(err.message);
-
         setStatus("Validation Failed");
       })
-
       .validateAIResponse(response);
   }
 
@@ -160,34 +161,26 @@
   function insertResponse() {
     if (validatedJSON == null) {
       alert("Validate response first.");
-
       return;
     }
 
     setStatus("Inserting...");
 
     google.script.run
-
       .withSuccessHandler(function (result) {
         if (result.success) {
           alert("Meeting Created\n\n" + "Meeting Code : " + result.meetingCode);
-
           setStatus("Completed");
-
           resetWorkspace();
         } else {
           alert(result.message);
-
           setStatus("Insert Failed");
         }
       })
-
       .withFailureHandler(function (err) {
         alert(err.message);
-
         setStatus("Insert Failed");
       })
-
       .insertValidatedResponse(JSON.stringify(validatedJSON));
   }
 
@@ -204,7 +197,6 @@
     const files = Array.from(input.files);
     setStatus('Processing ' + files.length + ' image(s) for OCR...');
 
-    // Read all files as base64 and process them
     let allBase64 = [];
     let filesProcessed = 0;
 
@@ -217,7 +209,6 @@
         filesProcessed++;
 
         if (filesProcessed === files.length) {
-          // All files read, now process them on the server
           processMultipleImages(allBase64);
         }
       };
@@ -231,7 +222,6 @@
     google.script.run
       .withSuccessHandler(onImageProcessResult)
       .withFailureHandler(function (err) {
-        // Try Tesseract.js fallback if server OCR fails (e.g., rate limit)
         if (err.message && err.message.includes('rate limit')) {
           setStatus('Server rate limited. Using client-side OCR...');
           processTesseractFallback(imageList);
@@ -244,21 +234,16 @@
   }
 
   function onImageProcessResult(result) {
-    // result: { ocrText, aiText, aiJson, ocrSource }
     if (!result) {
       alert('No result returned from image processing.');
       setStatus('Failed');
       return;
     }
     
-    // Store raw OCR text
     lastImageOcrText = result.ocrText || '';
-    
-    // Display OCR text in the preview box (with page markers for reference)
     document.getElementById('ocrText').textContent = result.ocrText || '';
     document.getElementById('ocrSource').textContent = 'OCR source: ' + (result.ocrSource || 'unknown');
 
-    // Auto-load clean OCR text (without page markers, with common errors fixed) into notes textarea
     var cleanOcrText = (result.ocrText || '').replace(/---PAGE \d+---/g, '\n').trim();
     cleanOcrText = fixCommonOcrErrors(cleanOcrText);
     document.getElementById('notes').value = cleanOcrText;
@@ -271,7 +256,6 @@
     setStatus('OCR loaded and cleaned. Ready to review and generate prompt.');
   }
 
-  // Tesseract.js fallback for client-side OCR
   async function processTesseractFallback(imageList) {
     try {
       const { createWorker } = Tesseract;
@@ -290,7 +274,6 @@
       document.getElementById('ocrText').textContent = combinedOcrText;
       document.getElementById('ocrSource').textContent = 'OCR source: tesseract.js (client-side)';
 
-      // Auto-load clean OCR text (without page markers, with common errors fixed) into notes textarea
       var cleanOcrText = combinedOcrText.replace(/---PAGE BREAK---/g, '\n').trim();
       cleanOcrText = fixCommonOcrErrors(cleanOcrText);
       document.getElementById('notes').value = cleanOcrText;
@@ -331,35 +314,30 @@
    *************************************************/
   function resetWorkspace() {
     generatedPrompt = "";
-
     validatedJSON = null;
-
     lastImageAIText = null;
-
     lastImageOcrText = null;
 
     document.getElementById("notes").value = "";
-
     document.getElementById("promptBox").value = "";
-
     document.getElementById("responseBox").value = "";
-
     document.getElementById("previewArea").textContent = "";
-
     document.getElementById("ocrText").textContent = "";
-
     document.getElementById("ocrSource").textContent = "";
-
     document.getElementById("imageFile").value = "";
 
     document.getElementById("promptCard").style.display = "none";
-
     document.getElementById("responseCard").style.display = "none";
-
     document.getElementById("previewCard").style.display = "none";
-
     document.getElementById('insertImageBtn').disabled = true;
 
     setStatus("Ready");
   }
+
+  /*************************************************
+   * Initialize on sidebar load
+   *************************************************/
+  document.addEventListener('DOMContentLoaded', function() {
+    loadAIProvider();
+  });
 </script>
