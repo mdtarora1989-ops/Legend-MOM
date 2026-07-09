@@ -64,7 +64,7 @@
 
           <textarea
             id="notes"
-            placeholder="Paste meeting notes here..."
+            placeholder="Paste meeting notes here... (OCR text will auto-load here)"
           ></textarea>
 
           <button class="primary" onclick="generatePrompt()">
@@ -78,18 +78,17 @@
 
         <!-- IMAGE UPLOAD -->
         <div class="card" id="imageCard">
-          <h2>Image Upload (OCR → AI)</h2>
-          <p style="font-size: 0.9em; color: #666;">Select one or more images from a multi-page meeting</p>
+          <h2>Image Upload (OCR → Notes)</h2>
+          <p style="font-size: 0.9em; color: #666;">Select one or more images from a multi-page meeting. OCR text will be automatically loaded into Meeting Notes above.</p>
 
           <input type="file" id="imageFile" accept="image/*" multiple />
           <div style="margin-top:8px">
             <button class="secondary" onclick="processImageUpload()">Process Images</button>
             <button class="secondary" id="insertImageBtn" onclick="insertImageAI()" disabled>Insert AI Result</button>
-            <button class="secondary" onclick="viewOcrOnly()" style="margin-left: 4px; background: #9b9b9b;">View OCR Only</button>
           </div>
 
-          <h4>OCR Text</h4>
-          <pre id="ocrText" style="max-height:200px; overflow:auto; background:#f7f7f7; padding:8px; border-radius:4px;"></pre>
+          <h4>OCR Text (Raw Preview)</h4>
+          <pre id="ocrText" style="max-height:150px; overflow:auto; background:#f7f7f7; padding:8px; border-radius:4px; font-size: 0.85em;"></pre>
           <p id="ocrSource" style="font-size: 0.85em; color: #999; margin-top: 4px;"></p>
 
         </div>

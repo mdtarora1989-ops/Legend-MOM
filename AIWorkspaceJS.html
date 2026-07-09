@@ -212,7 +212,7 @@
   }
 
   function processMultipleImages(imageList) {
-    setStatus('Uploading and processing ' + imageList.length + ' images...');
+    setStatus('Uploading and processing ' + imageList.length + ' image(s)...');
 
     google.script.run
       .withSuccessHandler(onImageProcessResult)
@@ -236,17 +236,24 @@
       setStatus('Failed');
       return;
     }
+    
+    // Store raw OCR text
+    lastImageOcrText = result.ocrText || '';
+    
+    // Display OCR text in the preview box (with page markers for reference)
     document.getElementById('ocrText').textContent = result.ocrText || '';
     document.getElementById('ocrSource').textContent = 'OCR source: ' + (result.ocrSource || 'unknown');
-    lastImageOcrText = result.ocrText || '';
+
+    // Auto-load clean OCR text (without page markers) into notes textarea
+    var cleanOcrText = (result.ocrText || '').replace(/---PAGE \d+---/g, '\n').trim();
+    document.getElementById('notes').value = cleanOcrText;
 
     if (result.aiJson) {
       document.getElementById('previewCard').style.display = 'block';
       document.getElementById('previewArea').textContent = JSON.stringify(result.aiJson, null, 2);
     }
     lastImageAIText = result.aiText || null;
-    document.getElementById('insertImageBtn').disabled = !lastImageAIText;
-    setStatus('Image(s) processed');
+    setStatus('OCR loaded into notes. Ready to generate prompt.');
   }
 
   // Tesseract.js fallback for client-side OCR
@@ -264,40 +271,24 @@
 
       await worker.terminate();
 
+      lastImageOcrText = combinedOcrText;
       document.getElementById('ocrText').textContent = combinedOcrText;
       document.getElementById('ocrSource').textContent = 'OCR source: tesseract.js (client-side)';
-      lastImageOcrText = combinedOcrText;
 
-      // Call AI parsing on the combined text
-      setStatus('Parsing with AI...');
-      google.script.run
-        .withSuccessHandler(onImageProcessResult)
-        .withFailureHandler(function (err) {
-          alert('AI parsing failed: ' + err.message);
-          setStatus('AI parsing failed');
-        })
-        .parseOcrTextToJson(combinedOcrText);
+      // Auto-load clean OCR text (without page markers) into notes textarea
+      var cleanOcrText = combinedOcrText.replace(/---PAGE BREAK---/g, '\n').trim();
+      document.getElementById('notes').value = cleanOcrText;
+      
+      setStatus('OCR loaded into notes. Ready to generate prompt.');
     } catch (err) {
       alert('Tesseract OCR failed: ' + err.message);
       setStatus('Failed');
     }
   }
 
-  function viewOcrOnly() {
-    if (!lastImageOcrText) {
-      alert('No OCR text available. Process image(s) first.');
-      return;
-    }
-    // Copy OCR text to notes textarea for manual review/editing
-    document.getElementById('notes').value = lastImageOcrText;
-    document.getElementById('promptCard').style.display = 'block';
-    document.getElementById('responseCard').style.display = 'block';
-    setStatus('OCR text loaded into notes. You can now generate a prompt or manually edit.');
-  }
-
   function insertImageAI() {
     if (!lastImageAIText) {
-      alert('No AI data to insert. Process image(s) first.');
+      alert('No AI data to insert. Process image(s) first and generate AI prompt.');
       return;
     }
     setStatus('Inserting AI result...');
