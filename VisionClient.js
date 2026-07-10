@@ -1,18 +1,23 @@
 /* VisionClient.js
- * Server-side handlers to process base64 images using Gemini Vision API (primary) 
- * with Drive OCR fallback.
- *
- * Primary: Gemini Vision API - faster, better accuracy, no Drive upload
- * Fallback: Drive OCR - if Gemini rate limited or fails
- * Client fallback: Tesseract.js - if server rate limited
- *
- * Added support for multiple images (concatenate OCR text) and Tesseract.js client-side
- * fallback when Gemini/Drive hit rate limits.
+ * Server-side handlers to process base64 images using selectable OCR method
+ * 
+ * Supports:
+ * - Drive OCR (best for handwriting)
+ * - Gemini Vision (best for printed text)
+ * - Auto (tries both, best result wins)
  */
 
 var VisionClient = (function () {
   /**
-   * Gemini Vision OCR - primary method
+   * Get selected OCR method from script properties
+   */
+  function getOCRMethod() {
+    var method = PropertiesService.getScriptProperties().getProperty("OCR_METHOD");
+    return method || 'auto';
+  }
+
+  /**
+   * Gemini Vision OCR - primary method for printed text
    * Sends base64 image directly to Gemini API for OCR
    */
   function processImageBase64_GeminiVision(base64, fileName) {
@@ -21,7 +26,7 @@ var VisionClient = (function () {
 
     var apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY not configured. Falling back to Drive OCR.");
+      throw new Error("GEMINI_API_KEY not configured");
     }
 
     var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + apiKey;
@@ -62,16 +67,14 @@ var VisionClient = (function () {
       var code = response.getResponseCode();
       var body = response.getContentText();
 
-      // Log for debugging
       Logger.log("[VisionClient] Gemini Vision HTTP " + code);
 
-      // Handle rate limiting
       if (code === 503) {
         throw new Error("Gemini rate limited (503)");
       }
 
       if (code >= 400) {
-        throw new Error("Gemini Vision error (HTTP " + code + "): " + body);
+        throw new Error("Gemini Vision error (HTTP " + code + ")");
       }
 
       var data = JSON.parse(body);
@@ -94,7 +97,7 @@ var VisionClient = (function () {
   }
 
   /**
-   * Drive OCR implementation (fallback)
+   * Drive OCR implementation (best for handwriting)
    * Uses Drive upload + convert=true to create a Google Doc
    */
   function processImageBase64_DriveOCR(base64, fileName) {
@@ -140,19 +143,19 @@ var VisionClient = (function () {
     var body = res.getContentText();
 
     if (code >= 400) {
-      throw new Error('Drive OCR failed: HTTP ' + code + ' - ' + body);
+      throw new Error('Drive OCR failed: HTTP ' + code);
     }
 
     var data;
     try {
       data = JSON.parse(body);
     } catch (e) {
-      throw new Error('Drive OCR: invalid JSON response: ' + e.message);
+      throw new Error('Drive OCR: invalid JSON response');
     }
 
     var docId = data.id;
     if (!docId) {
-      throw new Error('Drive OCR produced no document id.');
+      throw new Error('Drive OCR produced no document id');
     }
 
     try {
@@ -169,37 +172,66 @@ var VisionClient = (function () {
   }
 
   /**
-   * Smart OCR orchestration: Try Gemini first, fallback to Drive
+   * Smart OCR orchestration based on selected method
    */
   function processImageBase64_SmartOCR(base64, fileName) {
     var ocrText = '';
     var ocrSource = 'unknown';
+    var ocrMethod = getOCRMethod();
     var geminiError = null;
+    var driveError = null;
 
-    // Try Gemini Vision first (primary)
-    try {
-      ocrText = processImageBase64_GeminiVision(base64, fileName) || '';
-      ocrSource = 'gemini-vision';
-      Logger.log("[VisionClient] Gemini Vision succeeded");
-      return { text: ocrText, source: ocrSource };
-    } catch (err) {
-      geminiError = err;
-      Logger.log("[VisionClient] Gemini Vision failed: " + err.message);
-    }
+    Logger.log("[VisionClient] OCR Method selected: " + ocrMethod);
 
-    // Fallback to Drive OCR
-    try {
-      ocrText = processImageBase64_DriveOCR(base64, fileName) || '';
-      ocrSource = 'drive-ocr';
-      Logger.log("[VisionClient] Drive OCR succeeded (fallback)");
-      return { text: ocrText, source: ocrSource };
-    } catch (driveError) {
-      Logger.log("[VisionClient] Drive OCR also failed: " + driveError.message);
-      throw new Error("All OCR methods failed: Gemini - " + (geminiError ? geminiError.message : "unknown") + " | Drive - " + driveError.message);
+    if (ocrMethod === 'gemini') {
+      // Use Gemini Vision only
+      try {
+        ocrText = processImageBase64_GeminiVision(base64, fileName) || '';
+        ocrSource = 'gemini-vision';
+        Logger.log("[VisionClient] Gemini Vision succeeded");
+        return { text: ocrText, source: ocrSource };
+      } catch (err) {
+        Logger.log("[VisionClient] Gemini Vision failed: " + err.message);
+        throw err;
+      }
+    } else if (ocrMethod === 'drive') {
+      // Use Drive OCR only
+      try {
+        ocrText = processImageBase64_DriveOCR(base64, fileName) || '';
+        ocrSource = 'drive-ocr';
+        Logger.log("[VisionClient] Drive OCR succeeded");
+        return { text: ocrText, source: ocrSource };
+      } catch (err) {
+        Logger.log("[VisionClient] Drive OCR failed: " + err.message);
+        throw err;
+      }
+    } else {
+      // Auto: try Drive first (better for handwriting), then Gemini
+      try {
+        ocrText = processImageBase64_DriveOCR(base64, fileName) || '';
+        ocrSource = 'drive-ocr';
+        Logger.log("[VisionClient] Drive OCR succeeded (auto)");
+        return { text: ocrText, source: ocrSource };
+      } catch (err) {
+        driveError = err;
+        Logger.log("[VisionClient] Drive OCR failed, trying Gemini: " + err.message);
+      }
+
+      // Fallback to Gemini
+      try {
+        ocrText = processImageBase64_GeminiVision(base64, fileName) || '';
+        ocrSource = 'gemini-vision';
+        Logger.log("[VisionClient] Gemini Vision succeeded (fallback)");
+        return { text: ocrText, source: ocrSource };
+      } catch (err) {
+        geminiError = err;
+        Logger.log("[VisionClient] Gemini Vision also failed: " + err.message);
+        throw new Error("All OCR methods failed: Drive - " + (driveError ? driveError.message : "unknown") + " | Gemini - " + (geminiError ? geminiError.message : "unknown"));
+      }
     }
   }
 
-  // Extract candidate text from OpenAI-like responses
+  // Extract candidate text from AI responses
   function extractCandidateText(response) {
     var candidateText = null;
 
@@ -328,7 +360,8 @@ var VisionClient = (function () {
     processImageBase64_DriveOCR: processImageBase64_DriveOCR,
     processImageBase64_SmartOCR: processImageBase64_SmartOCR,
     processMultipleImagesBase64: processMultipleImagesBase64,
-    parseOcrTextToJson: parseOcrTextToJson
+    parseOcrTextToJson: parseOcrTextToJson,
+    getOCRMethod: getOCRMethod
   };
 })();
 
