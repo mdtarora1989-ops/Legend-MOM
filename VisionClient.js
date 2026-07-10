@@ -174,6 +174,7 @@ var VisionClient = (function () {
   function processImageBase64_SmartOCR(base64, fileName) {
     var ocrText = '';
     var ocrSource = 'unknown';
+    var geminiError = null;
 
     // Try Gemini Vision first (primary)
     try {
@@ -181,19 +182,20 @@ var VisionClient = (function () {
       ocrSource = 'gemini-vision';
       Logger.log("[VisionClient] Gemini Vision succeeded");
       return { text: ocrText, source: ocrSource };
-    } catch (geminiErr) {
-      Logger.log("[VisionClient] Gemini Vision failed, falling back to Drive OCR: " + geminiErr.message);
+    } catch (err) {
+      geminiError = err;
+      Logger.log("[VisionClient] Gemini Vision failed: " + err.message);
     }
 
     // Fallback to Drive OCR
     try {
       ocrText = processImageBase64_DriveOCR(base64, fileName) || '';
       ocrSource = 'drive-ocr';
-      Logger.log("[VisionClient] Drive OCR succeeded");
+      Logger.log("[VisionClient] Drive OCR succeeded (fallback)");
       return { text: ocrText, source: ocrSource };
-    } catch (driveErr) {
-      Logger.log("[VisionClient] Drive OCR also failed: " + driveErr.message);
-      throw new Error("All OCR methods failed: Gemini - " + geminiErr.message + " | Drive - " + driveErr.message);
+    } catch (driveError) {
+      Logger.log("[VisionClient] Drive OCR also failed: " + driveError.message);
+      throw new Error("All OCR methods failed: Gemini - " + (geminiError ? geminiError.message : "unknown") + " | Drive - " + driveError.message);
     }
   }
 
@@ -252,7 +254,7 @@ var VisionClient = (function () {
 
     // Build prompt and call AI (reuse PromptEngine + AIFormatter)
     var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, ocrText || '', {});
-    var aiResponse = AIFormatter.callOpenAI(prompt);
+    var aiResponse = AIFormatter.callAI(prompt);
     var aiText = extractCandidateText(aiResponse) || '';
 
     // Validate AI JSON
@@ -306,7 +308,7 @@ var VisionClient = (function () {
     if (!ocrText) throw new Error('Empty OCR text');
 
     var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, ocrText, {});
-    var aiResponse = AIFormatter.callOpenAI(prompt);
+    var aiResponse = AIFormatter.callAI(prompt);
     var aiText = extractCandidateText(aiResponse) || '';
 
     var validation = validateAIResponse(aiText);
