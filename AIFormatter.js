@@ -1,7 +1,7 @@
 /***************************************************************
  * Legend MOM Management System
  * AIFormatter.js - Support for both OpenAI and Gemini APIs
- * Version : 2.1 Gemini Pro
+ * Version : 2.2 Gemini 2.5 Flash
  ***************************************************************/
 
 const AIFormatter = (() => {
@@ -13,8 +13,8 @@ const AIFormatter = (() => {
   };
 
   const GEMINI_CONFIG = {
-    MODEL: "gemini-pro",
-    API_URL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+    MODEL: "gemini-2.5-flash",
+    API_URL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
     MAX_RETRIES: 2,
     TIMEOUT: 30000,
   };
