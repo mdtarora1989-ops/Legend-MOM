@@ -1,7 +1,7 @@
 /***************************************************************
  * Legend MOM Management System
  * AIFormatter.js - Support for both OpenAI and Gemini APIs
- * Version : 2.4 Enhanced Error Handling
+ * Version : 2.5 Enhanced Debugging
  ***************************************************************/
 
 const AIFormatter = (() => {
@@ -96,7 +96,8 @@ const AIFormatter = (() => {
       
       return JSON.parse(cleaned);
     } catch (err) {
-      throw new Error("JSON Parse Error: " + err.message + " | Response: " + (jsonString ? jsonString.substring(0, 100) : "empty"));
+      log("DEBUG - Raw response (first 200 chars): " + (jsonString ? jsonString.substring(0, 200) : "empty"));
+      throw new Error("JSON Parse Error: " + err.message);
     }
   }
 
@@ -166,6 +167,9 @@ const AIFormatter = (() => {
         const body = response.getContentText();
 
         log("Gemini HTTP " + code + " (attempt " + (attempt + 1) + ")");
+
+        // Log first 200 chars of response for debugging
+        log("DEBUG - Response preview: " + body.substring(0, 200));
 
         // Handle rate limiting - retry
         if (code === 503) {
