@@ -35,6 +35,29 @@
   }
 
   /*************************************************
+   * OCR Method Selector
+   *************************************************/
+  function switchOCRMethod() {
+    const method = document.getElementById("ocrMethodSelector").value;
+    google.script.run
+      .withSuccessHandler(function () {
+        setStatus("OCR Method switched to: " + method);
+      })
+      .withFailureHandler(function (err) {
+        alert("Failed to switch OCR method: " + err.message);
+      })
+      .setOCRMethod(method);
+  }
+
+  function loadOCRMethod() {
+    google.script.run
+      .withSuccessHandler(function (method) {
+        document.getElementById("ocrMethodSelector").value = method;
+      })
+      .getOCRMethod();
+  }
+
+  /*************************************************
    * Common OCR Error Fixes
    *************************************************/
   function fixCommonOcrErrors(text) {
@@ -339,5 +362,6 @@
    *************************************************/
   document.addEventListener('DOMContentLoaded', function() {
     loadAIProvider();
+    loadOCRMethod();
   });
 </script>
