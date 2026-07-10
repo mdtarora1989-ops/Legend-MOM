@@ -1,16 +1,14 @@
 /**********************************************************************
  * Legend MOM Management System
- * ------------------------------------------------------------
- * File    : AIController_AutoInsert.gs
- * Purpose : Build prompt, call OpenAI, extract JSON, validate and insert
- * CHANGELOG: Added fallback to normalize times and fill chairedBy from notes.
+ * AIController_AutoInsert.js - Auto Insert Flow (Dual AI Provider)
+ * Updated to use callAI() instead of hardcoded callOpenAI()
  **********************************************************************/
 
 function generateAndInsertFromNotes(notes) {
   notes = String(notes || "").trim();
   if (!notes) throw new Error("Meeting notes required.");
 
-  // Build prompt (we pass notes; parseHints optional)
+  // Build prompt
   var hints = {};
   try {
     hints = parseTimesAndChairFromNotes(notes) || {};
@@ -20,12 +18,17 @@ function generateAndInsertFromNotes(notes) {
 
   var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, notes, hints);
 
-  var response = AIFormatter.callOpenAI(prompt);
+  // Use selected AI provider (Gemini or OpenAI)
+  var response = AIFormatter.callAI(prompt);
 
   var candidateText = null;
 
-  // 1) Responses API style: response.output
-  if (response && response.output && Array.isArray(response.output)) {
+  // Handle string response (both Gemini and OpenAI return strings now)
+  if (typeof response === "string") {
+    candidateText = response;
+  }
+  // Handle object response.output (legacy)
+  else if (response && response.output && Array.isArray(response.output)) {
     try {
       var texts = [];
       response.output.forEach(function (o) {
@@ -46,22 +49,19 @@ function generateAndInsertFromNotes(notes) {
       // continue
     }
   }
-
-  // 2) Chat completions / choices
-  if (!candidateText && response && response.choices && response.choices[0]) {
+  // Handle response.choices (legacy OpenAI)
+  else if (response && response.choices && response.choices[0]) {
     var c = response.choices[0];
     if (c.message && c.message.content) candidateText = c.message.content;
     else if (c.text) candidateText = c.text;
   }
-
-  // 3) If response has 'text' at root
-  if (!candidateText && response && typeof response.text === 'string') {
+  // Handle response.text (legacy)
+  else if (response && typeof response.text === 'string') {
     candidateText = response.text;
   }
-
-  // 4) Fallback: if response is string
-  if (!candidateText && response && typeof response === "string") {
-    candidateText = response;
+  // Handle response as object
+  else if (response && typeof response === "object") {
+    candidateText = JSON.stringify(response);
   }
 
   if (!candidateText) {
@@ -73,7 +73,7 @@ function generateAndInsertFromNotes(notes) {
     throw new Error("AI response validation failed:\n" + validation.message);
   }
 
-  // --- Fallback: normalize times & fill missing chairedBy from notes ---
+  // Fallback: normalize times & fill missing chairedBy from notes
   var aiData = validation.data || {};
 
   var parsed = {};

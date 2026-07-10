@@ -1,5 +1,6 @@
 /**
  * DebugHelpers additions for auto-insert testing
+ * Updated to use dual AI provider
  */
 function runAutoInsertSample() {
   var notes = `Meeting: WRM
@@ -27,7 +28,7 @@ FG employees are to take FG material only between 9:00 AM to 6:00 PM.
 Pending task list is to be prepared and shared.`;
 
   try {
-    Logger.log('Running auto insert sample...');
+    Logger.log('Running auto insert sample using provider: ' + getAIProvider());
     var res = generateAndInsertFromNotes(notes);
     Logger.log('AutoInsert result: ' + JSON.stringify(res, null, 2));
   } catch (e) {
