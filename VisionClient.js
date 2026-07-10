@@ -1,16 +1,102 @@
 /* VisionClient.js
- * Server-side handlers to process base64 images using Drive OCR only (no Cloud Vision).
+ * Server-side handlers to process base64 images using Gemini Vision API (primary) 
+ * with Drive OCR fallback.
  *
- * This version forces Drive OCR by uploading the image to Drive with convert=true
- * which creates a Google Doc; the script reads the doc text and trashes the doc.
- * The AI parsing reuses existing PromptEngine + AIFormatter.
+ * Primary: Gemini Vision API - faster, better accuracy, no Drive upload
+ * Fallback: Drive OCR - if Gemini rate limited or fails
+ * Client fallback: Tesseract.js - if server rate limited
  *
  * Added support for multiple images (concatenate OCR text) and Tesseract.js client-side
- * fallback when Drive OCR hits rate limits.
+ * fallback when Gemini/Drive hit rate limits.
  */
 
 var VisionClient = (function () {
-  // Drive OCR implementation (uses Drive upload + convert=true to create a Google Doc)
+  /**
+   * Gemini Vision OCR - primary method
+   * Sends base64 image directly to Gemini API for OCR
+   */
+  function processImageBase64_GeminiVision(base64, fileName) {
+    base64 = String(base64 || '');
+    if (!base64) throw new Error('Empty image data');
+
+    var apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY not configured. Falling back to Drive OCR.");
+    }
+
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" + apiKey;
+
+    var payload = {
+      contents: [
+        {
+          parts: [
+            {
+              text: "Extract all text from this image. Return only the extracted text, no commentary."
+            },
+            {
+              inline_data: {
+                mime_type: "image/png",
+                data: base64
+              }
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 4096
+      }
+    };
+
+    var options = {
+      method: "post",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    try {
+      var response = UrlFetchApp.fetch(url, options);
+      var code = response.getResponseCode();
+      var body = response.getContentText();
+
+      // Log for debugging
+      Logger.log("[VisionClient] Gemini Vision HTTP " + code);
+
+      // Handle rate limiting
+      if (code === 503) {
+        throw new Error("Gemini rate limited (503)");
+      }
+
+      if (code >= 400) {
+        throw new Error("Gemini Vision error (HTTP " + code + "): " + body);
+      }
+
+      var data = JSON.parse(body);
+      var extractedText = data.candidates && 
+                          data.candidates[0] && 
+                          data.candidates[0].content && 
+                          data.candidates[0].content.parts && 
+                          data.candidates[0].content.parts[0] && 
+                          data.candidates[0].content.parts[0].text;
+
+      if (!extractedText) {
+        throw new Error("No text extracted from image");
+      }
+
+      return extractedText;
+    } catch (err) {
+      Logger.log("[VisionClient] Gemini Vision failed: " + err.message);
+      throw err;
+    }
+  }
+
+  /**
+   * Drive OCR implementation (fallback)
+   * Uses Drive upload + convert=true to create a Google Doc
+   */
   function processImageBase64_DriveOCR(base64, fileName) {
     base64 = String(base64 || '');
     if (!base64) throw new Error('Empty image data');
@@ -22,7 +108,7 @@ var VisionClient = (function () {
     var closeDelim = '\r\n--' + boundary + '--';
 
     var metadata = {
-      title: fileName || ('upload-' + new Date().getTime() + '.png'),
+      title: fileName || ('ocr-' + new Date().getTime() + '.png'),
       mimeType: 'image/png'
     };
 
@@ -82,7 +168,36 @@ var VisionClient = (function () {
     }
   }
 
-  // Extract candidate text from OpenAI-like responses (same logic as AIController)
+  /**
+   * Smart OCR orchestration: Try Gemini first, fallback to Drive
+   */
+  function processImageBase64_SmartOCR(base64, fileName) {
+    var ocrText = '';
+    var ocrSource = 'unknown';
+
+    // Try Gemini Vision first (primary)
+    try {
+      ocrText = processImageBase64_GeminiVision(base64, fileName) || '';
+      ocrSource = 'gemini-vision';
+      Logger.log("[VisionClient] Gemini Vision succeeded");
+      return { text: ocrText, source: ocrSource };
+    } catch (geminiErr) {
+      Logger.log("[VisionClient] Gemini Vision failed, falling back to Drive OCR: " + geminiErr.message);
+    }
+
+    // Fallback to Drive OCR
+    try {
+      ocrText = processImageBase64_DriveOCR(base64, fileName) || '';
+      ocrSource = 'drive-ocr';
+      Logger.log("[VisionClient] Drive OCR succeeded");
+      return { text: ocrText, source: ocrSource };
+    } catch (driveErr) {
+      Logger.log("[VisionClient] Drive OCR also failed: " + driveErr.message);
+      throw new Error("All OCR methods failed: Gemini - " + geminiErr.message + " | Drive - " + driveErr.message);
+    }
+  }
+
+  // Extract candidate text from OpenAI-like responses
   function extractCandidateText(response) {
     var candidateText = null;
 
@@ -124,16 +239,16 @@ var VisionClient = (function () {
     return candidateText;
   }
 
-  // Drive-only process: base64 -> Drive OCR -> AI parse -> validate
+  /**
+   * Process single image: Smart OCR -> AI parse -> validate
+   */
   function processImageBase64(base64, fileName) {
     base64 = String(base64 || '');
     if (!base64) throw new Error('Empty image data');
 
-    var ocrText = '';
-    var used = 'drive';
-
-    // Force Drive OCR
-    ocrText = processImageBase64_DriveOCR(base64, fileName) || '';
+    var ocrResult = processImageBase64_SmartOCR(base64, fileName);
+    var ocrText = ocrResult.text || '';
+    var used = ocrResult.source || 'unknown';
 
     // Build prompt and call AI (reuse PromptEngine + AIFormatter)
     var prompt = PromptEngine.build(PromptEngine.TYPES.MOM, ocrText || '', {});
@@ -152,15 +267,22 @@ var VisionClient = (function () {
     };
   }
 
-  // Process multiple images: ONLY extract OCR text, NO AI parsing
-  // This allows users to review OCR before committing to AI parsing
+  /**
+   * Process multiple images: Smart OCR for each, concatenate text
+   * No AI parsing yet - allows user review before committing
+   */
   function processMultipleImagesBase64(imageList) {
     var allOcrText = '';
+    var ocrSources = [];
 
     for (var i = 0; i < imageList.length; i++) {
       var img = imageList[i];
-      var pageOcr = processImageBase64_DriveOCR(img.base64, img.name) || '';
+      var ocrResult = processImageBase64_SmartOCR(img.base64, img.name);
+      var pageOcr = ocrResult.text || '';
+      
       allOcrText += pageOcr;
+      ocrSources.push(ocrResult.source);
+      
       if (i < imageList.length - 1) {
         allOcrText += '\n---PAGE ' + (i + 1) + '---\n';
       }
@@ -172,11 +294,13 @@ var VisionClient = (function () {
       aiText: null,
       aiJson: null,
       validation: null,
-      ocrSource: 'drive'
+      ocrSource: ocrSources.join(' + ')
     };
   }
 
-  // Parse OCR text to JSON (called by Tesseract fallback from client or manual flow)
+  /**
+   * Parse OCR text to JSON
+   */
   function parseOcrTextToJson(ocrText) {
     ocrText = String(ocrText || '');
     if (!ocrText) throw new Error('Empty OCR text');
@@ -192,13 +316,15 @@ var VisionClient = (function () {
       aiText: aiText,
       aiJson: validation.success ? validation.data : null,
       validation: validation,
-      ocrSource: 'drive'
+      ocrSource: 'manual-parse'
     };
   }
 
   return {
     processImageBase64: processImageBase64,
+    processImageBase64_GeminiVision: processImageBase64_GeminiVision,
     processImageBase64_DriveOCR: processImageBase64_DriveOCR,
+    processImageBase64_SmartOCR: processImageBase64_SmartOCR,
     processMultipleImagesBase64: processMultipleImagesBase64,
     parseOcrTextToJson: parseOcrTextToJson
   };
