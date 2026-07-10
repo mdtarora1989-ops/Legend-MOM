@@ -1,7 +1,7 @@
 /***************************************************************
  * Legend MOM Management System
  * AIFormatter.js - Support for both OpenAI and Gemini APIs
- * Version : 2.5 Enhanced Debugging
+ * Version : 2.6 Enhanced Debugging for Image OCR
  ***************************************************************/
 
 const AIFormatter = (() => {
@@ -96,7 +96,7 @@ const AIFormatter = (() => {
       
       return JSON.parse(cleaned);
     } catch (err) {
-      log("DEBUG - Raw response (first 200 chars): " + (jsonString ? jsonString.substring(0, 200) : "empty"));
+      log("DEBUG - Raw response (first 300 chars): " + (jsonString ? jsonString.substring(0, 300) : "empty"));
       throw new Error("JSON Parse Error: " + err.message);
     }
   }
@@ -162,20 +162,22 @@ const AIFormatter = (() => {
     
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
+        log("Gemini attempt " + (attempt + 1) + " of " + maxRetries);
         const response = UrlFetchApp.fetch(url, options);
         const code = response.getResponseCode();
         const body = response.getContentText();
 
         log("Gemini HTTP " + code + " (attempt " + (attempt + 1) + ")");
 
-        // Log first 200 chars of response for debugging
-        log("DEBUG - Response preview: " + body.substring(0, 200));
+        // Log response preview for debugging
+        log("DEBUG - Gemini response preview (first 300 chars): " + body.substring(0, 300));
 
         // Handle rate limiting - retry
         if (code === 503) {
           lastError = new Error("Service overloaded (503). Retrying...");
           if (attempt < maxRetries - 1) {
-            Utilities.sleep(2000); // Wait 2 seconds before retry
+            log("503 error detected, waiting 2 seconds before retry...");
+            Utilities.sleep(2000);
             continue;
           }
           throw lastError;
@@ -192,6 +194,7 @@ const AIFormatter = (() => {
           throw new Error("Invalid Gemini response structure: " + JSON.stringify(data));
         }
         
+        log("Gemini extraction successful, returning content");
         return content;
       } catch (err) {
         lastError = err;
@@ -199,7 +202,7 @@ const AIFormatter = (() => {
           throw new Error("Gemini Request Failed: " + err.message);
         }
         log("Retry " + (attempt + 1) + " due to: " + err.message);
-        Utilities.sleep(2000); // Wait 2 seconds before next retry
+        Utilities.sleep(2000);
       }
     }
 
