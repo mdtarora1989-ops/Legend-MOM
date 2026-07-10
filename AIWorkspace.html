@@ -18,13 +18,26 @@
         <div class="subtitle">Intelligent Meeting Management Platform</div>
       </div>
 
-      <!-- AI PROVIDER SELECTOR -->
-      <div style="background: #f0f0f0; padding: 8px 12px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 0.9em; color: #666;">AI Provider:</span>
-        <select id="aiProviderSelector" onchange="switchAIProvider()" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 0.9em;">
-          <option value="gemini">🔷 Gemini (Free Tier)</option>
-          <option value="openai">🔴 OpenAI (Paid)</option>
-        </select>
+      <!-- CONTROL PANEL -->
+      <div style="background: #f0f0f0; padding: 10px 12px; border-bottom: 1px solid #ddd;">
+        <!-- AI Provider Selector -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 0.9em; color: #666;">AI Provider:</span>
+          <select id="aiProviderSelector" onchange="switchAIProvider()" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 0.9em;">
+            <option value="gemini">🔷 Gemini (Free Tier)</option>
+            <option value="openai">🔴 OpenAI (Paid)</option>
+          </select>
+        </div>
+
+        <!-- OCR Method Selector -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.9em; color: #666;">OCR Method:</span>
+          <select id="ocrMethodSelector" onchange="switchOCRMethod()" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 0.9em;">
+            <option value="auto">🔄 Auto (Best Available)</option>
+            <option value="drive">📄 Google Drive OCR (Handwriting)</option>
+            <option value="gemini">🔷 Gemini Vision (Printed)</option>
+          </select>
+        </div>
       </div>
 
       <!-- STEP BAR -->
