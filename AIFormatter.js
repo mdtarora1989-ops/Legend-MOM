@@ -1,7 +1,7 @@
 /***************************************************************
  * Legend MOM Management System
  * AIFormatter.js - Support for both OpenAI and Gemini APIs
- * Version : 2.3 Gemini Flash Latest
+ * Version : 2.4 Enhanced Error Handling
  ***************************************************************/
 
 const AIFormatter = (() => {
@@ -79,6 +79,28 @@ const AIFormatter = (() => {
   }
 
   /**
+   * Safely parse JSON response
+   */
+  function safeJsonParse(jsonString) {
+    try {
+      if (!jsonString || typeof jsonString !== 'string') {
+        throw new Error("Response is not a valid string");
+      }
+      
+      // Remove any BOM or extra whitespace
+      const cleaned = jsonString.trim();
+      
+      if (!cleaned) {
+        throw new Error("Response is empty");
+      }
+      
+      return JSON.parse(cleaned);
+    } catch (err) {
+      throw new Error("JSON Parse Error: " + err.message + " | Response: " + (jsonString ? jsonString.substring(0, 100) : "empty"));
+    }
+  }
+
+  /**
    * Call OpenAI API
    */
   function callOpenAI(prompt) {
@@ -106,7 +128,7 @@ const AIFormatter = (() => {
         throw new Error("OpenAI error: " + body);
       }
 
-      const data = JSON.parse(body);
+      const data = safeJsonParse(body);
       const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
       if (!content) {
         throw new Error("Invalid OpenAI response structure");
@@ -118,7 +140,7 @@ const AIFormatter = (() => {
   }
 
   /**
-   * Call Gemini API
+   * Call Gemini API with retry logic
    */
   function callGemini(prompt) {
     const apiKey = getGeminiKey();
@@ -134,26 +156,50 @@ const AIFormatter = (() => {
       muteHttpExceptions: true,
     };
 
-    try {
-      const response = UrlFetchApp.fetch(url, options);
-      const code = response.getResponseCode();
-      const body = response.getContentText();
+    let lastError = null;
+    const maxRetries = 3;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = UrlFetchApp.fetch(url, options);
+        const code = response.getResponseCode();
+        const body = response.getContentText();
 
-      log("Gemini HTTP " + code);
+        log("Gemini HTTP " + code + " (attempt " + (attempt + 1) + ")");
 
-      if (code >= 400) {
-        throw new Error("Gemini error: " + body);
+        // Handle rate limiting - retry
+        if (code === 503) {
+          lastError = new Error("Service overloaded (503). Retrying...");
+          if (attempt < maxRetries - 1) {
+            Utilities.sleep(2000); // Wait 2 seconds before retry
+            continue;
+          }
+          throw lastError;
+        }
+
+        if (code >= 400) {
+          throw new Error("Gemini error (HTTP " + code + "): " + body);
+        }
+
+        const data = safeJsonParse(body);
+        const content = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+        
+        if (!content) {
+          throw new Error("Invalid Gemini response structure: " + JSON.stringify(data));
+        }
+        
+        return content;
+      } catch (err) {
+        lastError = err;
+        if (attempt === maxRetries - 1) {
+          throw new Error("Gemini Request Failed: " + err.message);
+        }
+        log("Retry " + (attempt + 1) + " due to: " + err.message);
+        Utilities.sleep(2000); // Wait 2 seconds before next retry
       }
-
-      const data = JSON.parse(body);
-      const content = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
-      if (!content) {
-        throw new Error("Invalid Gemini response structure");
-      }
-      return content;
-    } catch (err) {
-      throw new Error("Gemini Request Failed: " + err.message);
     }
+
+    throw lastError || new Error("Gemini Request Failed: Unknown error");
   }
 
   /**
