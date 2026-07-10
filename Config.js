@@ -1,6 +1,6 @@
 /**********************************************************************
  * Legend MOM Management System
- * Config.js - Global Configuration + Gemini/OpenAI Provider Selection
+ * Config.js - Global Configuration + AI & OCR Provider Selection
  **********************************************************************/
 
 const CONFIG = Object.freeze({
@@ -26,6 +26,12 @@ const CONFIG = Object.freeze({
   //==============================================================
 
   DEFAULT_AI_PROVIDER: "gemini", // "openai" or "gemini"
+
+  //==============================================================
+  // OCR METHOD (Drive, Gemini, or Auto)
+  //==============================================================
+
+  DEFAULT_OCR_METHOD: "auto", // "drive", "gemini", or "auto"
 
   //==============================================================
   // MENU
@@ -102,6 +108,24 @@ function setAIProvider(provider) {
     throw new Error("Invalid AI provider: " + provider);
   }
   PropertiesService.getScriptProperties().setProperty("AI_PROVIDER", provider);
+}
+
+/**
+ * Get OCR Method from Script Properties (with fallback to default)
+ */
+function getOCRMethod() {
+  const method = PropertiesService.getScriptProperties().getProperty("OCR_METHOD");
+  return method || CONFIG.DEFAULT_OCR_METHOD;
+}
+
+/**
+ * Set OCR Method in Script Properties
+ */
+function setOCRMethod(method) {
+  if (!['drive', 'gemini', 'auto'].includes(method)) {
+    throw new Error("Invalid OCR method: " + method);
+  }
+  PropertiesService.getScriptProperties().setProperty("OCR_METHOD", method);
 }
 
 /**
@@ -243,6 +267,7 @@ function configHealthCheck(){
   Logger.log("Company : " + info.company);
   Logger.log("Sheet : " + info.sheet);
   Logger.log("AI Provider : " + getAIProvider());
+  Logger.log("OCR Method : " + getOCRMethod());
   Logger.log("======================================");
 
   const map = getColumnMap();
