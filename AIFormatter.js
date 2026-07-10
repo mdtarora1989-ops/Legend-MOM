@@ -1,7 +1,7 @@
 /***************************************************************
  * Legend MOM Management System
  * AIFormatter.js - Support for both OpenAI and Gemini APIs
- * Version : 2.6 Enhanced Debugging for Image OCR
+ * Version : 2.7 Strip Markdown JSON & Increase Token Limit
  ***************************************************************/
 
 const AIFormatter = (() => {
@@ -73,9 +73,23 @@ const AIFormatter = (() => {
       ],
       generationConfig: {
         temperature: 0.3,
-        maxOutputTokens: 2048
+        maxOutputTokens: 8192
       }
     };
+  }
+
+  /**
+   * Strip markdown code fences from response
+   * Converts ```json {...} ``` to just {...}
+   */
+  function stripMarkdownCodeFence(text) {
+    if (!text || typeof text !== 'string') return text;
+    
+    // Remove markdown code fences: ```json ... ``` or ``` ... ```
+    let cleaned = text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+    
+    log("DEBUG - After stripping markdown: " + cleaned.substring(0, 150));
+    return cleaned;
   }
 
   /**
@@ -88,11 +102,14 @@ const AIFormatter = (() => {
       }
       
       // Remove any BOM or extra whitespace
-      const cleaned = jsonString.trim();
+      let cleaned = jsonString.trim();
       
       if (!cleaned) {
         throw new Error("Response is empty");
       }
+      
+      // Strip markdown code fences if present
+      cleaned = stripMarkdownCodeFence(cleaned);
       
       return JSON.parse(cleaned);
     } catch (err) {
@@ -188,11 +205,14 @@ const AIFormatter = (() => {
         }
 
         const data = safeJsonParse(body);
-        const content = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+        let content = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
         
         if (!content) {
           throw new Error("Invalid Gemini response structure: " + JSON.stringify(data));
         }
+        
+        // Strip markdown code fences from Gemini response
+        content = stripMarkdownCodeFence(content);
         
         log("Gemini extraction successful, returning content");
         return content;
