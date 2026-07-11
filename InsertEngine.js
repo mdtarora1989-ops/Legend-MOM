@@ -2,7 +2,7 @@
  * Legend MOM Management System
  * --------------------------------------------------------------------
  * Module  : InsertEngine.gs
- * Version : 3.1 (Time Format Fix)
+ * Version : 3.2 (Auto-Height)
  * Part    : 1 of 5
  * Purpose : Insert Preparation Engine
  **********************************************************************/
@@ -298,9 +298,9 @@ function insertEnginePart1HealthCheck() {
 }
 /**********************************************************************
  * Legend MOM Management System
- * --------------------------------------------------------------------
+ * ------------------------------------------------------------
  * Module  : InsertEngine.gs
- * Version : 3.1 (Time Format Fix)
+ * Version : 3.2 (Auto-Height)
  * Part    : 2 of 5
  * Purpose : Data Writer Engine
  **********************************************************************/
@@ -582,7 +582,6 @@ function insertEnginePart2HealthCheck() {
   InsertEngine.writeMeetingData(
 
       mom,
-
       ctx
 
   );
@@ -592,9 +591,9 @@ function insertEnginePart2HealthCheck() {
 }
 /**********************************************************************
  * Legend MOM Management System
- * --------------------------------------------------------------------
+ * ------------------------------------------------------------
  * Module  : InsertEngine.gs
- * Version : 3.1 (Time Format Fix)
+ * Version : 3.2 (Auto-Height)
  * Part    : 3 of 5
  * Purpose : Transaction & Formatting Engine
  **********************************************************************/
@@ -659,6 +658,24 @@ InsertEngine.mergeArea = function (ctx) {
 
 
 /**********************************************************************
+ * Auto-sizes row heights based on content
+ **********************************************************************/
+InsertEngine.autoSizeRowHeights = function (mom, ctx) {
+
+  var participantsText = MOMBuilder.getParticipantsText(mom);
+  var discussionCount = mom.discussion.length;
+  
+  SheetService.autoSizeRowHeight(
+    ctx.startRow,
+    ctx.endRow,
+    participantsText,
+    discussionCount
+  );
+
+};
+
+
+/**********************************************************************
  * Executes complete write transaction.
  **********************************************************************/
 InsertEngine.execute = function (mom, ctx) {
@@ -675,6 +692,9 @@ InsertEngine.execute = function (mom, ctx) {
   );
 
   InsertEngine.mergeArea(ctx);
+
+  // AUTO-SIZE ROWS BASED ON CONTENT
+  InsertEngine.autoSizeRowHeights(mom, ctx);
 
 };
 
@@ -788,9 +808,9 @@ function insertEnginePart3HealthCheck() {
 }
 /**********************************************************************
  * Legend MOM Management System
- * --------------------------------------------------------------------
+ * ------------------------------------------------------------
  * Module  : InsertEngine.gs
- * Version : 3.1 (Time Format Fix)
+ * Version : 3.2 (Auto-Height)
  * Part    : 4 of 5
  * Purpose : Logging & Utility Engine
  **********************************************************************/
@@ -964,9 +984,9 @@ function insertEnginePart4HealthCheck() {
 }
 /**********************************************************************
  * Legend MOM Management System
- * --------------------------------------------------------------------
+ * ------------------------------------------------------------
  * Module  : InsertEngine.gs
- * Version : 3.1 (Time Format Fix)
+ * Version : 3.2 (Auto-Height)
  * Part    : 5 of 5
  * Purpose : Final Validation & Test Suite
  **********************************************************************/
@@ -1042,7 +1062,7 @@ function insertEngineHealthCheck() {
 
   Logger.log("========================================");
   Logger.log("Legend MOM Management System");
-  Logger.log("InsertEngine Version 3.1 (Time Format Fix)");
+  Logger.log("InsertEngine Version 3.2 (Auto-Height)");
   Logger.log("========================================");
 
   var mom = MOMBuilder.create();
@@ -1115,7 +1135,7 @@ InsertEngine.version = function () {
 
     module: "InsertEngine",
 
-    version: "3.1 (Time Format Fix)",
+    version: "3.2 (Auto-Height)",
 
     status: "Production",
 

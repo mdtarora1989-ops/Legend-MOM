@@ -2,9 +2,9 @@
  * Legend MOM Management System
  * ------------------------------------------------------------
  * Module  : SheetService.gs
- * Version : 1.1 (tolerant)
+ * Version : 1.2 (with auto-height)
  * Purpose : Sheet Access Layer (Core) — small robustness tweaks
- * CHANGELOG: Added column normalization, safer last column, column cache handling.
+ * CHANGELOG: Added row height auto-sizing based on content
  **********************************************************************/
 
 var SheetService = {};
@@ -107,6 +107,39 @@ SheetService.copyTemplateFormatting = function (targetRow, numberOfRows) {
       SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
       false
     );
+  }
+};
+
+/**
+ * Auto-size row height based on content length
+ * Calculates height based on participants + discussion text
+ */
+SheetService.autoSizeRowHeight = function (startRow, endRow, participantsText, discussionCount) {
+  if (endRow < startRow) return;
+  
+  var sheet = SheetService.getSheet();
+  var totalLength = (participantsText || '').length + (discussionCount || 0) * 50;
+  var calculatedHeight = 30; // Base height
+  
+  // Estimate height based on content
+  // ~40-50 chars per line at normal width
+  var estimatedLines = Math.ceil(totalLength / 45);
+  
+  if (estimatedLines < 2) {
+    calculatedHeight = 25;
+  } else if (estimatedLines < 4) {
+    calculatedHeight = 35;
+  } else if (estimatedLines < 6) {
+    calculatedHeight = 50;
+  } else if (estimatedLines < 10) {
+    calculatedHeight = 65;
+  } else {
+    calculatedHeight = 80; // Max height
+  }
+  
+  // Set row height for the meeting block
+  for (var row = startRow; row <= endRow; row++) {
+    sheet.setRowHeight(row, calculatedHeight);
   }
 };
 
