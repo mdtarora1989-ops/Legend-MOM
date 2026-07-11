@@ -45,19 +45,16 @@
       <div class="stepBar">
         <div class="step active">
           <div class="circle">1</div>
-
-          <div class="label">JSON Input</div>
+          <div class="label">Input</div>
         </div>
 
         <div class="step">
           <div class="circle">2</div>
-
           <div class="label">Preview</div>
         </div>
 
         <div class="step">
           <div class="circle">3</div>
-
           <div class="label">Insert</div>
         </div>
       </div>
@@ -65,26 +62,42 @@
       <!-- CONTENT -->
 
       <div class="content">
-        <!-- STEP 1: JSON INPUT (Always visible) -->
+        <!-- STEP 1A: MEETING NOTES -->
 
         <div class="card">
-          <h2>Step 1</h2>
+          <h2>Option A: Meeting Notes</h2>
 
-          <h3>Paste JSON Response</h3>
+          <p style="font-size: 0.9em; color: #666; margin-bottom: 8px;">Paste OCR text or manual notes here. Then use AI to generate JSON.</p>
 
-          <p style="font-size: 0.9em; color: #666; margin-bottom: 8px;">Paste the AI-generated JSON directly below. Include: meetingDate, startTime, endTime, chairedBy, participants, agenda, and discussion.</p>
+          <textarea
+            id="notes"
+            placeholder="Paste meeting notes, OCR text, or transcription here..."
+            style="height: 150px;"
+          ></textarea>
+
+          <button class="primary" onclick="generatePrompt()" style="width: 100%;">
+            Generate AI Prompt
+          </button>
+        </div>
+
+        <!-- STEP 1B: PASTE JSON -->
+
+        <div class="card">
+          <h2>Option B: Paste JSON Response</h2>
+
+          <p style="font-size: 0.9em; color: #666; margin-bottom: 8px;">Paste the AI-generated JSON directly below.</p>
 
           <textarea
             id="responseBox"
             placeholder="Paste JSON here..."
-            style="height: 250px;"
+            style="height: 150px;"
           ></textarea>
 
-          <button class="primary" onclick="validateResponse()">
+          <button class="primary" onclick="validateResponse()" style="width: 100%; margin-bottom: 8px;">
             Validate & Preview
           </button>
 
-          <button class="secondary" style="margin-left: 8px;" onclick="resetWorkspace()">
+          <button class="secondary" onclick="resetWorkspace()" style="width: 100%;">
             Clear
           </button>
         </div>
@@ -92,16 +105,16 @@
         <!-- IMAGE UPLOAD -->
         <div class="card" id="imageCard">
           <h2>Alternative: Image Upload (OCR)</h2>
-          <p style="font-size: 0.9em; color: #666;">Or select images from a meeting. OCR will extract text, which you can then use with an AI tool to generate JSON.</p>
+          <p style="font-size: 0.9em; color: #666;">Upload meeting images for automatic text extraction.</p>
 
           <input type="file" id="imageFile" accept="image/*" multiple />
           <div style="margin-top:8px">
-            <button class="secondary" onclick="processImageUpload()">Process Images</button>
-            <button class="secondary" id="insertImageBtn" onclick="insertImageAI()" disabled>Insert AI Result</button>
+            <button class="secondary" onclick="processImageUpload()" style="width: 100%; margin-bottom: 6px;">Process Images</button>
+            <button class="secondary" id="insertImageBtn" onclick="insertImageAI()" disabled style="width: 100%;">Insert AI Result</button>
           </div>
 
           <h4>OCR Text (Raw Preview)</h4>
-          <pre id="ocrText" style="max-height:150px; overflow:auto; background:#f7f7f7; padding:8px; border-radius:4px; font-size: 0.85em;"></pre>
+          <pre id="ocrText" style="max-height:120px; overflow:auto; background:#f7f7f7; padding:8px; border-radius:4px; font-size: 0.85em;"></pre>
           <p id="ocrSource" style="font-size: 0.85em; color: #999; margin-top: 4px;"></p>
 
         </div>
@@ -109,17 +122,15 @@
         <!-- STEP 2: PREVIEW -->
 
         <div class="card" id="previewCard" style="display: none">
-          <h2>Step 2</h2>
+          <h2>Step 2: Preview Data</h2>
 
-          <h3>Preview Data</h3>
+          <pre id="previewArea" style="max-height: 250px; overflow: auto; background: #f7f7f7; padding: 12px; border-radius: 4px; font-size: 0.85em;"></pre>
 
-          <pre id="previewArea" style="max-height: 300px; overflow: auto; background: #f7f7f7; padding: 12px; border-radius: 4px; font-size: 0.85em;"></pre>
-
-          <button class="success" onclick="insertResponse()" style="margin-top: 12px;">
+          <button class="success" onclick="insertResponse()" style="width: 100%; margin-top: 12px;">
             Insert into MOM Sheet
           </button>
 
-          <button class="secondary" onclick="resetWorkspace()" style="margin-left: 8px;">
+          <button class="secondary" onclick="resetWorkspace()" style="width: 100%; margin-top: 8px;">
             Back
           </button>
         </div>

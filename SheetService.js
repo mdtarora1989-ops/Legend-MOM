@@ -2,9 +2,9 @@
  * Legend MOM Management System
  * ------------------------------------------------------------
  * Module  : SheetService.gs
- * Version : 1.2 (with auto-height)
- * Purpose : Sheet Access Layer (Core) — small robustness tweaks
- * CHANGELOG: Added row height auto-sizing based on content
+ * Version : 1.3 (refined auto-height)
+ * Purpose : Sheet Access Layer (Core) 
+ * CHANGELOG: Refined row height calculation for better visibility
  **********************************************************************/
 
 var SheetService = {};
@@ -111,30 +111,32 @@ SheetService.copyTemplateFormatting = function (targetRow, numberOfRows) {
 };
 
 /**
- * Auto-size row height based on content length
+ * Auto-size row height based on content length (REFINED)
  * Calculates height based on participants + discussion text
  */
 SheetService.autoSizeRowHeight = function (startRow, endRow, participantsText, discussionCount) {
   if (endRow < startRow) return;
   
   var sheet = SheetService.getSheet();
-  var totalLength = (participantsText || '').length + (discussionCount || 0) * 50;
-  var calculatedHeight = 30; // Base height
+  var totalLength = (participantsText || '').length + (discussionCount || 0) * 30;
+  var calculatedHeight = 25; // Base height
   
-  // Estimate height based on content
-  // ~40-50 chars per line at normal width
-  var estimatedLines = Math.ceil(totalLength / 45);
+  // Refined height estimation
+  // ~50 chars per line at normal column width
+  var estimatedLines = Math.ceil(totalLength / 50);
   
-  if (estimatedLines < 2) {
+  if (estimatedLines <= 1) {
     calculatedHeight = 25;
-  } else if (estimatedLines < 4) {
+  } else if (estimatedLines <= 2) {
+    calculatedHeight = 30;
+  } else if (estimatedLines <= 3) {
     calculatedHeight = 35;
-  } else if (estimatedLines < 6) {
-    calculatedHeight = 50;
-  } else if (estimatedLines < 10) {
-    calculatedHeight = 65;
+  } else if (estimatedLines <= 4) {
+    calculatedHeight = 40;
+  } else if (estimatedLines <= 6) {
+    calculatedHeight = 45;
   } else {
-    calculatedHeight = 80; // Max height
+    calculatedHeight = 45; // Max height (refined)
   }
   
   // Set row height for the meeting block

@@ -1,4 +1,5 @@
 <script>
+  let generatedPrompt = "";
   let validatedJSON = null;
   let lastImageAIText = null;
   let lastImageOcrText = null;
@@ -54,6 +55,32 @@
         document.getElementById("ocrMethodSelector").value = method;
       })
       .getOCRMethod();
+  }
+
+  /*************************************************
+   * Generate Prompt
+   *************************************************/
+  function generatePrompt() {
+    const notes = document.getElementById("notes").value.trim();
+
+    if (notes === "") {
+      alert("Please enter meeting notes.");
+      return;
+    }
+
+    setStatus("Generating AI Prompt...");
+
+    google.script.run
+      .withSuccessHandler(function (prompt) {
+        generatedPrompt = prompt;
+        alert("Prompt generated!\n\nCopy this prompt and paste it into ChatGPT or your AI tool to generate JSON.\n\nPrompt:\n\n" + prompt);
+        setStatus("Prompt Ready - Copy to clipboard and use with AI tool");
+      })
+      .withFailureHandler(function (error) {
+        setStatus("Failed");
+        alert(error.message);
+      })
+      .generatePrompt(notes);
   }
 
   /*************************************************
@@ -183,7 +210,7 @@
     document.getElementById('ocrSource').textContent = 'OCR source: ' + (result.ocrSource || 'unknown');
 
     lastImageAIText = result.aiText || null;
-    setStatus('OCR complete. Copy text above, convert to JSON using AI, then paste in Step 1.');
+    setStatus('OCR complete. Copy text above and use with AI tool.');
   }
 
   async function processTesseractFallback(imageList) {
@@ -204,7 +231,7 @@
       document.getElementById('ocrText').textContent = combinedOcrText;
       document.getElementById('ocrSource').textContent = 'OCR source: tesseract.js (client-side)';
       
-      setStatus('OCR complete. Copy text above, convert to JSON using AI, then paste in Step 1.');
+      setStatus('OCR complete. Copy text above and use with AI tool.');
     } catch (err) {
       alert('Tesseract OCR failed: ' + err.message);
       setStatus('Failed');
@@ -215,10 +242,12 @@
    * Reset
    *************************************************/
   function resetWorkspace() {
+    generatedPrompt = "";
     validatedJSON = null;
     lastImageAIText = null;
     lastImageOcrText = null;
 
+    document.getElementById("notes").value = "";
     document.getElementById("responseBox").value = "";
     document.getElementById("previewArea").textContent = "";
     document.getElementById("ocrText").textContent = "";
@@ -237,6 +266,6 @@
   document.addEventListener('DOMContentLoaded', function() {
     loadAIProvider();
     loadOCRMethod();
-    setStatus("Ready - Paste JSON in Step 1");
+    setStatus("Ready - Choose Option A or B");
   });
 </script>
