@@ -2,13 +2,45 @@
  * Legend MOM Management System
  * --------------------------------------------------------------------
  * Module  : InsertEngine.gs
- * Version : 3.0 Final
+ * Version : 3.1 (Time Format Fix)
  * Part    : 1 of 5
  * Purpose : Insert Preparation Engine
  **********************************************************************/
 
 var InsertEngine = {};
 
+
+/**
+ * Helper: Convert HH:MM time string to decimal time value for Google Sheets
+ * E.g., "08:00" → 8/24, "14:30" → 14.5/24
+ */
+function _parseTimeToDecimal(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') {
+    return '';
+  }
+  
+  timeStr = timeStr.trim();
+  
+  // Match HH:MM or H:MM format (24-hour)
+  var match = timeStr.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) {
+    return timeStr; // Return as-is if not parseable
+  }
+  
+  var hours = parseInt(match[1], 10);
+  var minutes = parseInt(match[2], 10);
+  
+  // Validate
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return timeStr;
+  }
+  
+  // Convert to decimal: time as fraction of day
+  // E.g., 08:00 = 8 hours / 24 hours = 0.333...
+  var decimalTime = (hours + minutes / 60) / 24;
+  
+  return decimalTime;
+}
 
 /**********************************************************************
  * Returns required rows.
@@ -202,9 +234,10 @@ InsertEngine.buildHeaderRow = function (mom, ctx) {
 
   row[SheetService.column("DATE") - 1] = mom.date;
 
-  row[SheetService.column("START_TIME") - 1] = mom.startTime;
+  // Convert time strings to decimal format
+  row[SheetService.column("START_TIME") - 1] = _parseTimeToDecimal(mom.startTime);
 
-  row[SheetService.column("END_TIME") - 1] = mom.endTime;
+  row[SheetService.column("END_TIME") - 1] = _parseTimeToDecimal(mom.endTime);
 
   row[SheetService.column("MEETING_CODE") - 1] = mom.meetingCode;
 
@@ -267,7 +300,7 @@ function insertEnginePart1HealthCheck() {
  * Legend MOM Management System
  * --------------------------------------------------------------------
  * Module  : InsertEngine.gs
- * Version : 3.0 Final
+ * Version : 3.1 (Time Format Fix)
  * Part    : 2 of 5
  * Purpose : Data Writer Engine
  **********************************************************************/
@@ -298,6 +331,24 @@ ctx.sheet.getRange(
     ctx.totalRows,
     ctx.lastColumn - 1
 ).setValues(outputRows);
+
+// Apply time format to START_TIME and END_TIME columns
+var timeStartCol = SheetService.column("START_TIME");
+var timeEndCol = SheetService.column("END_TIME");
+
+ctx.sheet.getRange(
+    ctx.startRow,
+    timeStartCol,
+    ctx.totalRows,
+    1
+).setNumberFormat("hh:mm AM/PM");
+
+ctx.sheet.getRange(
+    ctx.startRow,
+    timeEndCol,
+    ctx.totalRows,
+    1
+).setNumberFormat("hh:mm AM/PM");
 
 };
 
@@ -543,7 +594,7 @@ function insertEnginePart2HealthCheck() {
  * Legend MOM Management System
  * --------------------------------------------------------------------
  * Module  : InsertEngine.gs
- * Version : 3.0 Final
+ * Version : 3.1 (Time Format Fix)
  * Part    : 3 of 5
  * Purpose : Transaction & Formatting Engine
  **********************************************************************/
@@ -739,7 +790,7 @@ function insertEnginePart3HealthCheck() {
  * Legend MOM Management System
  * --------------------------------------------------------------------
  * Module  : InsertEngine.gs
- * Version : 3.0 Final
+ * Version : 3.1 (Time Format Fix)
  * Part    : 4 of 5
  * Purpose : Logging & Utility Engine
  **********************************************************************/
@@ -915,7 +966,7 @@ function insertEnginePart4HealthCheck() {
  * Legend MOM Management System
  * --------------------------------------------------------------------
  * Module  : InsertEngine.gs
- * Version : 3.0 Final
+ * Version : 3.1 (Time Format Fix)
  * Part    : 5 of 5
  * Purpose : Final Validation & Test Suite
  **********************************************************************/
@@ -991,7 +1042,7 @@ function insertEngineHealthCheck() {
 
   Logger.log("========================================");
   Logger.log("Legend MOM Management System");
-  Logger.log("InsertEngine Version 3.0");
+  Logger.log("InsertEngine Version 3.1 (Time Format Fix)");
   Logger.log("========================================");
 
   var mom = MOMBuilder.create();
@@ -1064,7 +1115,7 @@ InsertEngine.version = function () {
 
     module: "InsertEngine",
 
-    version: "3.0 Final",
+    version: "3.1 (Time Format Fix)",
 
     status: "Production",
 
