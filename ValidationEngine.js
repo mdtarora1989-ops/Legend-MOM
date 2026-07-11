@@ -2,7 +2,7 @@
  * Legend MOM Management System
  * ------------------------------------------------------------
  * Module  : ValidationEngine.gs
- * Version : 1.0
+ * Version : 1.1 (Simplified - no targetDate/status)
  * Purpose : Validate MOM Object
  **********************************************************************/
 
@@ -35,6 +35,7 @@ ValidationEngine.addError = function (result, message) {
 
 /**
  * Validates MOM object
+ * NOTE: targetDate and status are removed from validation
  */
 ValidationEngine.validate = function (mom) {
 

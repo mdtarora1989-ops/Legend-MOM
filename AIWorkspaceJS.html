@@ -1,5 +1,4 @@
 <script>
-  let generatedPrompt = "";
   let validatedJSON = null;
   let lastImageAIText = null;
   let lastImageOcrText = null;
@@ -58,101 +57,17 @@
   }
 
   /*************************************************
-   * Common OCR Error Fixes
-   *************************************************/
-  function fixCommonOcrErrors(text) {
-    text = text.replace(/\|/g, 'l');           // | -> l
-    text = text.replace(/\b0+\b/g, 'O');      // standalone 0 -> O
-    text = text.replace(/S([A-Z])/g, '5$1');  // S followed by uppercase -> 5
-    text = text.replace(/rn/g, 'm');          // rn -> m
-    text = text.replace(/\s+/g, ' ');         // multiple spaces -> single space
-    text = text.replace(/([a-z])([A-Z])/g, '$1 $2'); // missing space between words
-    return text;
-  }
-
-  /*************************************************
-   * Generate Prompt
-   *************************************************/
-  function generatePrompt() {
-    const notes = document.getElementById("notes").value.trim();
-
-    if (notes === "") {
-      alert("Please enter meeting notes.");
-      return;
-    }
-
-    setStatus("Generating AI Prompt...");
-
-    google.script.run
-      .withSuccessHandler(function (prompt) {
-        generatedPrompt = prompt;
-        document.getElementById("promptBox").value = prompt;
-        document.getElementById("promptCard").style.display = "block";
-        document.getElementById("responseCard").style.display = "block";
-        setStatus("Prompt Ready");
-      })
-      .withFailureHandler(function (error) {
-        setStatus("Failed");
-        alert(error.message);
-      })
-      .generatePrompt(notes);
-  }
-
-  /*************************************************
-   * Auto Generate & Insert (one-click flow)
-   *************************************************/
-  function autoGenerateAndInsert() {
-    const notes = document.getElementById("notes").value.trim();
-    if (notes === "") {
-      alert("Please enter meeting notes.");
-      return;
-    }
-
-    setStatus("Calling AI...");
-
-    google.script.run
-      .withSuccessHandler(function (res) {
-        if (res && res.success) {
-          alert("Meeting Created: " + res.meetingCode);
-          setStatus("Completed");
-          resetWorkspace();
-        } else {
-          alert("Failed: " + (res && res.message ? res.message : 'Unknown'));
-          setStatus("Failed");
-        }
-      })
-      .withFailureHandler(function (err) {
-        alert("Failed: " + err.message);
-        setStatus("Failed");
-      })
-      .generateAndInsertFromNotes(notes);
-  }
-
-  /*************************************************
-   * Copy Prompt
-   *************************************************/
-  function copyPrompt() {
-    if (generatedPrompt === "") {
-      alert("Generate prompt first.");
-      return;
-    }
-
-    navigator.clipboard.writeText(generatedPrompt);
-    setStatus("Prompt copied to clipboard.");
-  }
-
-  /*************************************************
    * Validate JSON
    *************************************************/
   function validateResponse() {
     const response = document.getElementById("responseBox").value.trim();
 
     if (response === "") {
-      alert("Paste ChatGPT response first.");
+      alert("Paste JSON response first.");
       return;
     }
 
-    setStatus("Validating...");
+    setStatus("Validating JSON...");
 
     google.script.run
       .withSuccessHandler(function (result) {
@@ -169,7 +84,7 @@
           null,
           2,
         );
-        setStatus("JSON Valid");
+        setStatus("JSON Valid - Ready to Insert");
       })
       .withFailureHandler(function (err) {
         alert(err.message);
@@ -183,7 +98,7 @@
    *************************************************/
   function insertResponse() {
     if (validatedJSON == null) {
-      alert("Validate response first.");
+      alert("Validate JSON first.");
       return;
     }
 
@@ -192,7 +107,7 @@
     google.script.run
       .withSuccessHandler(function (result) {
         if (result.success) {
-          alert("Meeting Created\n\n" + "Meeting Code : " + result.meetingCode);
+          alert("Meeting Created!\n\nMeeting Code: " + result.meetingCode);
           setStatus("Completed");
           resetWorkspace();
         } else {
@@ -267,16 +182,8 @@
     document.getElementById('ocrText').textContent = result.ocrText || '';
     document.getElementById('ocrSource').textContent = 'OCR source: ' + (result.ocrSource || 'unknown');
 
-    var cleanOcrText = (result.ocrText || '').replace(/---PAGE \d+---/g, '\n').trim();
-    cleanOcrText = fixCommonOcrErrors(cleanOcrText);
-    document.getElementById('notes').value = cleanOcrText;
-
-    if (result.aiJson) {
-      document.getElementById('previewCard').style.display = 'block';
-      document.getElementById('previewArea').textContent = JSON.stringify(result.aiJson, null, 2);
-    }
     lastImageAIText = result.aiText || null;
-    setStatus('OCR loaded and cleaned. Ready to review and generate prompt.');
+    setStatus('OCR complete. Copy text above, convert to JSON using AI, then paste in Step 1.');
   }
 
   async function processTesseractFallback(imageList) {
@@ -296,61 +203,28 @@
       lastImageOcrText = combinedOcrText;
       document.getElementById('ocrText').textContent = combinedOcrText;
       document.getElementById('ocrSource').textContent = 'OCR source: tesseract.js (client-side)';
-
-      var cleanOcrText = combinedOcrText.replace(/---PAGE BREAK---/g, '\n').trim();
-      cleanOcrText = fixCommonOcrErrors(cleanOcrText);
-      document.getElementById('notes').value = cleanOcrText;
       
-      setStatus('OCR loaded and cleaned. Ready to review and generate prompt.');
+      setStatus('OCR complete. Copy text above, convert to JSON using AI, then paste in Step 1.');
     } catch (err) {
       alert('Tesseract OCR failed: ' + err.message);
       setStatus('Failed');
     }
   }
 
-  function insertImageAI() {
-    if (!lastImageAIText) {
-      alert('No AI data to insert. Process image(s) first and generate AI prompt.');
-      return;
-    }
-    setStatus('Inserting AI result...');
-    google.script.run
-      .withSuccessHandler(function (res) {
-        if (res && res.success) {
-          alert('Meeting Created: ' + res.meetingCode);
-          setStatus('Completed');
-          resetWorkspace();
-        } else {
-          alert('Insert failed: ' + (res && res.message ? res.message : 'Unknown'));
-          setStatus('Insert Failed');
-        }
-      })
-      .withFailureHandler(function (err) {
-        alert('Insert failed: ' + err.message);
-        setStatus('Insert Failed');
-      })
-      .insertValidatedResponse(lastImageAIText);
-  }
-
   /*************************************************
    * Reset
    *************************************************/
   function resetWorkspace() {
-    generatedPrompt = "";
     validatedJSON = null;
     lastImageAIText = null;
     lastImageOcrText = null;
 
-    document.getElementById("notes").value = "";
-    document.getElementById("promptBox").value = "";
     document.getElementById("responseBox").value = "";
     document.getElementById("previewArea").textContent = "";
     document.getElementById("ocrText").textContent = "";
     document.getElementById("ocrSource").textContent = "";
     document.getElementById("imageFile").value = "";
 
-    document.getElementById("promptCard").style.display = "none";
-    document.getElementById("responseCard").style.display = "none";
     document.getElementById("previewCard").style.display = "none";
     document.getElementById('insertImageBtn').disabled = true;
 
@@ -363,5 +237,6 @@
   document.addEventListener('DOMContentLoaded', function() {
     loadAIProvider();
     loadOCRMethod();
+    setStatus("Ready - Paste JSON in Step 1");
   });
 </script>

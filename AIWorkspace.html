@@ -46,29 +46,17 @@
         <div class="step active">
           <div class="circle">1</div>
 
-          <div class="label">Notes</div>
+          <div class="label">JSON Input</div>
         </div>
 
         <div class="step">
           <div class="circle">2</div>
 
-          <div class="label">Prompt</div>
-        </div>
-
-        <div class="step">
-          <div class="circle">3</div>
-
-          <div class="label">AI Reply</div>
-        </div>
-
-        <div class="step">
-          <div class="circle">4</div>
-
           <div class="label">Preview</div>
         </div>
 
         <div class="step">
-          <div class="circle">5</div>
+          <div class="circle">3</div>
 
           <div class="label">Insert</div>
         </div>
@@ -77,31 +65,34 @@
       <!-- CONTENT -->
 
       <div class="content">
-        <!-- STEP 1 -->
+        <!-- STEP 1: JSON INPUT (Always visible) -->
 
         <div class="card">
           <h2>Step 1</h2>
 
-          <h3>Meeting Notes</h3>
+          <h3>Paste JSON Response</h3>
+
+          <p style="font-size: 0.9em; color: #666; margin-bottom: 8px;">Paste the AI-generated JSON directly below. Include: meetingDate, startTime, endTime, chairedBy, participants, agenda, and discussion.</p>
 
           <textarea
-            id="notes"
-            placeholder="Paste meeting notes here... (OCR text will auto-load here)"
+            id="responseBox"
+            placeholder="Paste JSON here..."
+            style="height: 250px;"
           ></textarea>
 
-          <button class="primary" onclick="generatePrompt()">
-            Generate AI Prompt
+          <button class="primary" onclick="validateResponse()">
+            Validate & Preview
           </button>
 
-          <button class="primary" style="margin-top:8px" onclick="autoGenerateAndInsert()">
-            Auto Generate & Insert
+          <button class="secondary" style="margin-left: 8px;" onclick="resetWorkspace()">
+            Clear
           </button>
         </div>
 
         <!-- IMAGE UPLOAD -->
         <div class="card" id="imageCard">
-          <h2>Image Upload (OCR → Notes)</h2>
-          <p style="font-size: 0.9em; color: #666;">Select one or more images from a multi-page meeting. OCR text will be automatically loaded into Meeting Notes above.</p>
+          <h2>Alternative: Image Upload (OCR)</h2>
+          <p style="font-size: 0.9em; color: #666;">Or select images from a meeting. OCR will extract text, which you can then use with an AI tool to generate JSON.</p>
 
           <input type="file" id="imageFile" accept="image/*" multiple />
           <div style="margin-top:8px">
@@ -115,46 +106,21 @@
 
         </div>
 
-        <!-- STEP 2 -->
-
-        <div class="card" id="promptCard" style="display: none">
-          <h2>Step 2</h2>
-
-          <h3>Generated Prompt</h3>
-
-          <textarea id="promptBox" readonly></textarea>
-
-          <button class="secondary" onclick="copyPrompt()">Copy Prompt</button>
-        </div>
-
-        <!-- STEP 3 -->
-
-        <div class="card" id="responseCard" style="display: none">
-          <h2>Step 3</h2>
-
-          <h3>Paste ChatGPT Response</h3>
-
-          <textarea
-            id="responseBox"
-            placeholder="Paste ChatGPT JSON here..."
-          ></textarea>
-
-          <button class="primary" onclick="validateResponse()">
-            Validate Response
-          </button>
-        </div>
-
-        <!-- STEP 4 -->
+        <!-- STEP 2: PREVIEW -->
 
         <div class="card" id="previewCard" style="display: none">
-          <h2>Step 4</h2>
+          <h2>Step 2</h2>
 
-          <h3>Preview</h3>
+          <h3>Preview Data</h3>
 
-          <pre id="previewArea"></pre>
+          <pre id="previewArea" style="max-height: 300px; overflow: auto; background: #f7f7f7; padding: 12px; border-radius: 4px; font-size: 0.85em;"></pre>
 
-          <button class="success" onclick="insertResponse()">
-            Insert into MOM
+          <button class="success" onclick="insertResponse()" style="margin-top: 12px;">
+            Insert into MOM Sheet
+          </button>
+
+          <button class="secondary" onclick="resetWorkspace()" style="margin-left: 8px;">
+            Back
           </button>
         </div>
       </div>

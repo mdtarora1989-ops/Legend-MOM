@@ -2,9 +2,8 @@
  * Legend MOM Management System
  * ------------------------------------------------------------
  * Module  : AIMapper.js
- * Version : 1.1 (tolerant)
+ * Version : 1.2 (Simplified - no targetDate/status)
  * Purpose : Convert AI JSON into MOM Object (more tolerant parsing)
- * CHANGELOG: added tolerant mapping for participants/discussion
  **********************************************************************/
 
 var AIMapper = {};
@@ -55,7 +54,8 @@ function _extractParticipants(raw) {
 }
 
 /**
- * Normalize discussion array into array of detail strings (will preserve structured fields in objects)
+ * Normalize discussion array - SIMPLIFIED (no targetDate/status)
+ * Returns simple text strings for discussion points
  */
 function _extractDiscussion(raw) {
   var out = [];
@@ -71,8 +71,6 @@ function _extractDiscussion(raw) {
         var extras = [];
         if (item.action) extras.push('Action: ' + _toStr(item.action).trim());
         if (item.owner) extras.push('Owner: ' + _toStr(item.owner).trim());
-        if (item.targetDate) extras.push('Target: ' + _toStr(item.targetDate).trim());
-        if (item.status) extras.push('Status: ' + _toStr(item.status).trim());
         if (extras.length) {
           if (text) text = text + ' (' + extras.join('; ') + ')';
           else text = extras.join('; ');
@@ -94,6 +92,7 @@ function _extractDiscussion(raw) {
 
 /**
  * Converts AI JSON into MOM Object
+ * NOTE: targetDate and status fields are ignored
  */
 AIMapper.mapToMOM = function (ai) {
   var mom = MOMBuilder.create();
@@ -107,7 +106,7 @@ AIMapper.mapToMOM = function (ai) {
   mom.location = ai.location || CONFIG.DEFAULT_LOCATION;
   mom.chairedBy = ai.chairedBy || ai.chair || ai.chaired_by || '';
   mom.agenda = ai.agenda || ai.topic || ai.subject || '';
-  mom.recordStatus = ai.recordStatus || ai.recordStatus || CONFIG.DEFAULT_RECORD_STATUS;
+  mom.recordStatus = ai.recordStatus || CONFIG.DEFAULT_RECORD_STATUS;
 
   // ---------- Participants ----------
   var participants = [];
