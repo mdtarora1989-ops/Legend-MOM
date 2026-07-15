@@ -1,9 +1,9 @@
 /**********************************************************************
  * Legend MOM Management System
- * ------------------------------------------------------------
+ * --------------------------------------------------------------------
  * Module  : ValidationEngine.gs
- * Version : 1.1 (Simplified - no targetDate/status)
- * Purpose : Validate MOM Object
+ * Version : 1.2 (With Unique Meeting Check)
+ * Purpose : Validate MOM Object & Check Duplicates by Unique ID
  **********************************************************************/
 
 var ValidationEngine = {};
@@ -128,6 +128,89 @@ ValidationEngine.validateOrThrow = function (mom) {
 
   return true;
 
+};
+
+
+/**
+ * Creates unique meeting identifier from key fields
+ * Unique Key = Date + StartTime + Location + ChairedBy + Agenda
+ */
+ValidationEngine.createMeetingUniqueKey = function (mom) {
+  
+  var date = String(mom.date || "").trim();
+  var startTime = String(mom.startTime || "").trim();
+  var location = String(mom.location || "").trim();
+  var chairedBy = String(mom.chairedBy || "").trim();
+  var agenda = String(mom.agenda || "").trim();
+  
+  // Create normalized key (lowercase, no extra spaces)
+  var key = (date + "|" + startTime + "|" + location + "|" + chairedBy + "|" + agenda).toLowerCase().trim();
+  
+  return key;
+};
+
+
+/**
+ * Checks if a meeting with same unique identifier already exists
+ * Returns: { exists: boolean, row: number }
+ */
+ValidationEngine.checkMeetingExists = function (mom) {
+  
+  var sheet = SheetService.getSheet();
+  var lastRow = sheet.getLastRow();
+  
+  if (lastRow < CONFIG.FIRST_DATA_ROW) {
+    return { exists: false, row: -1 };
+  }
+  
+  var uniqueKey = ValidationEngine.createMeetingUniqueKey(mom);
+  
+  // Get all relevant columns
+  var dateCol = SheetService.column("DATE");
+  var startTimeCol = SheetService.column("START_TIME");
+  var locationCol = SheetService.column("LOCATION");
+  var chairedByCol = SheetService.column("CHAIRED_BY");
+  var agendaCol = SheetService.column("AGENDA");
+  var meetingCodeCol = SheetService.column("MEETING_CODE");
+  
+  // Get all data ranges
+  var dateRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, dateCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
+  var startTimeRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, startTimeCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
+  var locationRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, locationCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
+  var chairedByRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, chairedByCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
+  var agendaRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, agendaCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
+  var meetingCodeRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, meetingCodeCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
+  
+  // Compare with each row
+  for (var i = 0; i < dateRange.length; i++) {
+    
+    var existingMeetingCode = String(meetingCodeRange[i][0]).trim();
+    
+    // Skip empty rows
+    if (existingMeetingCode === "") {
+      continue;
+    }
+    
+    // Build key from existing row
+    var existingDate = String(dateRange[i][0]).trim();
+    var existingStartTime = String(startTimeRange[i][0]).trim();
+    var existingLocation = String(locationRange[i][0]).trim();
+    var existingChairedBy = String(chairedByRange[i][0]).trim();
+    var existingAgenda = String(agendaRange[i][0]).trim();
+    
+    var existingKey = (existingDate + "|" + existingStartTime + "|" + existingLocation + "|" + existingChairedBy + "|" + existingAgenda).toLowerCase().trim();
+    
+    // If keys match, meeting already exists
+    if (uniqueKey === existingKey) {
+      return {
+        exists: true,
+        row: CONFIG.FIRST_DATA_ROW + i,
+        meetingCode: existingMeetingCode
+      };
+    }
+  }
+  
+  return { exists: false, row: -1 };
 };
 
 
