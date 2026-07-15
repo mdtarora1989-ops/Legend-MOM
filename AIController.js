@@ -2,7 +2,7 @@
  * Legend MOM Management System
  * --------------------------------------------------------------------
  * Module  : AIController.js
- * Version : 2.0
+ * Version : 2.1 (Enhanced Duplicate Prevention)
  * Purpose : AI Workspace Controller
  **********************************************************************/
 
@@ -79,7 +79,30 @@ function validateAIResponse(text) {
 }
 
 /**
- * Insert AI Response
+ * Pre-Insert Duplicate Check (ENHANCED)
+ */
+function checkDuplicateMeeting(json) {
+  // Extract meeting code from JSON
+  var meetingCode = String(json.meetingCode || "").trim();
+  
+  if (meetingCode === "") {
+    throw new Error("Meeting code is missing from JSON.");
+  }
+
+  // Check in sheet
+  if (SheetService.meetingExists(meetingCode)) {
+    throw new Error(
+      "❌ DUPLICATE DETECTED!\n\n" +
+      "Meeting Code: " + meetingCode + " already exists in the sheet.\n\n" +
+      "Please use a different meeting code or verify your JSON."
+    );
+  }
+
+  return true;
+}
+
+/**
+ * Insert AI Response (WITH ENHANCED DUPLICATE PREVENTION)
  */
 function insertValidatedResponse(text) {
   const validation = validateAIResponse(text);
@@ -89,6 +112,10 @@ function insertValidatedResponse(text) {
   }
 
   try {
+    // STEP 1: Pre-insert duplicate check
+    checkDuplicateMeeting(validation.data);
+    
+    // STEP 2: Insert only if no duplicate
     const result = AIMapper.insert(validation.data);
 
     return {
@@ -100,7 +127,7 @@ function insertValidatedResponse(text) {
 
       endRow: result.endRow,
 
-      message: "Meeting inserted successfully.",
+      message: "✅ Meeting inserted successfully.",
     };
   } catch (error) {
     return {

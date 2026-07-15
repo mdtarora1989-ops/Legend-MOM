@@ -4,6 +4,7 @@
   let lastImageAIText = null;
   let lastImageOcrText = null;
   let isInserting = false; // Prevent double-click
+  let insertTimeout = null; // Timeout safety
 
   /*************************************************
    * Status
@@ -22,15 +23,23 @@
       btn.textContent = "Insert into MOM Sheet";
     }
     isInserting = false;
+    if (insertTimeout) clearTimeout(insertTimeout);
   }
 
   function disableInsertButton() {
     var btn = document.getElementById("insertBtn");
     if (btn) {
       btn.disabled = true;
-      btn.textContent = "Processing... Please wait";
+      btn.textContent = "⏳ Processing... Please wait";
     }
     isInserting = true;
+    
+    // Safety timeout - re-enable after 60 seconds
+    if (insertTimeout) clearTimeout(insertTimeout);
+    insertTimeout = setTimeout(function() {
+      setStatus("⚠️ Process took too long. Re-enabled button. Please try again.");
+      enableInsertButton();
+    }, 60000);
   }
 
   /*************************************************
@@ -133,7 +142,7 @@
           null,
           2,
         );
-        setStatus("JSON Valid - Ready to Insert");
+        setStatus("✅ JSON Valid - Ready to Insert");
       })
       .withFailureHandler(function (err) {
         alert(err.message);
@@ -143,12 +152,12 @@
   }
 
   /*************************************************
-   * Insert (with duplicate prevention)
+   * Insert (with enhanced duplicate prevention)
    *************************************************/
   function insertResponse() {
     // Check if already inserting
     if (isInserting) {
-      alert("Meeting is already being inserted. Please wait...");
+      alert("⏳ Meeting is already being inserted. Please wait...\n\nIf this takes more than 60 seconds, the button will auto-enable.");
       return;
     }
 
@@ -159,25 +168,30 @@
 
     // Disable button to prevent double-click
     disableInsertButton();
-    setStatus("Inserting... (This may take a few seconds)");
+    setStatus("🔄 Inserting... (This may take a few seconds)");
 
     google.script.run
       .withSuccessHandler(function (result) {
         enableInsertButton();
         
         if (result.success) {
-          alert("✅ Meeting Created Successfully!\n\nMeeting Code: " + result.meetingCode + "\n\nRows: " + result.startRow + " - " + result.endRow);
-          setStatus("Completed - New meeting inserted");
+          alert(
+            "✅ Meeting Created Successfully!\n\n" +
+            "Meeting Code: " + result.meetingCode + "\n" +
+            "Rows: " + result.startRow + " - " + result.endRow + "\n\n" +
+            "(Duplicate prevention active - no duplicate will be created)"
+          );
+          setStatus("✅ Completed - New meeting inserted");
           resetWorkspace();
         } else {
           alert("❌ Error: " + result.message);
-          setStatus("Insert Failed - " + result.message);
+          setStatus("❌ Insert Failed - " + result.message);
         }
       })
       .withFailureHandler(function (err) {
         enableInsertButton();
         alert("❌ Error: " + err.message);
-        setStatus("Insert Failed - Please try again");
+        setStatus("❌ Insert Failed - Please try again");
       })
       .insertValidatedResponse(JSON.stringify(validatedJSON));
   }
