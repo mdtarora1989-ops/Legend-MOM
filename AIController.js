@@ -2,7 +2,7 @@
  * Legend MOM Management System
  * --------------------------------------------------------------------
  * Module  : AIController.js
- * Version : 2.1 (Enhanced Duplicate Prevention)
+ * Version : 2.2 (Auto Meeting Code Generation)
  * Purpose : AI Workspace Controller
  **********************************************************************/
 
@@ -79,6 +79,20 @@ function validateAIResponse(text) {
 }
 
 /**
+ * Auto-generate meeting code if missing
+ */
+function ensureMeetingCode(json) {
+  // If meeting code already exists and valid, keep it
+  if (json.meetingCode && String(json.meetingCode).trim() !== "") {
+    return json;
+  }
+
+  // Generate new meeting code
+  json.meetingCode = MeetingCodeEngine.generate();
+  return json;
+}
+
+/**
  * Pre-Insert Duplicate Check (ENHANCED)
  */
 function checkDuplicateMeeting(json) {
@@ -86,7 +100,7 @@ function checkDuplicateMeeting(json) {
   var meetingCode = String(json.meetingCode || "").trim();
   
   if (meetingCode === "") {
-    throw new Error("Meeting code is missing from JSON.");
+    throw new Error("Meeting code generation failed.");
   }
 
   // Check in sheet
@@ -94,7 +108,7 @@ function checkDuplicateMeeting(json) {
     throw new Error(
       "❌ DUPLICATE DETECTED!\n\n" +
       "Meeting Code: " + meetingCode + " already exists in the sheet.\n\n" +
-      "Please use a different meeting code or verify your JSON."
+      "Please try again - a new meeting code will be generated."
     );
   }
 
@@ -102,7 +116,7 @@ function checkDuplicateMeeting(json) {
 }
 
 /**
- * Insert AI Response (WITH ENHANCED DUPLICATE PREVENTION)
+ * Insert AI Response (WITH AUTO MEETING CODE + DUPLICATE PREVENTION)
  */
 function insertValidatedResponse(text) {
   const validation = validateAIResponse(text);
@@ -112,11 +126,14 @@ function insertValidatedResponse(text) {
   }
 
   try {
-    // STEP 1: Pre-insert duplicate check
-    checkDuplicateMeeting(validation.data);
+    // STEP 1: Auto-generate meeting code if missing
+    var jsonData = ensureMeetingCode(validation.data);
     
-    // STEP 2: Insert only if no duplicate
-    const result = AIMapper.insert(validation.data);
+    // STEP 2: Pre-insert duplicate check
+    checkDuplicateMeeting(jsonData);
+    
+    // STEP 3: Insert only if no duplicate
+    const result = AIMapper.insert(jsonData);
 
     return {
       success: true,
