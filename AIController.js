@@ -1,8 +1,8 @@
 /**********************************************************************
  * Legend MOM Management System
- * --------------------------------------------------------------------
+ * ------------------------------------------------------------
  * Module  : AIController.js
- * Version : 2.4 (Backward Compatible Field Names)
+ * Version : 2.5 (TIMEOUT FIX - Async Insert)
  * Purpose : AI Workspace Controller
  **********************************************************************/
 
@@ -46,17 +46,13 @@ function validateAIResponse(text) {
   if (text === "") {
     return {
       success: false,
-
       message: "Empty AI response.",
     };
   }
 
   // Remove Markdown
-
   text = text.replace(/^```json/i, "");
-
   text = text.replace(/^```/i, "");
-
   text = text.replace(/```$/i, "");
 
   try {
@@ -64,15 +60,12 @@ function validateAIResponse(text) {
 
     return {
       success: true,
-
       message: "JSON Valid",
-
       data: json,
     };
   } catch (error) {
     return {
       success: false,
-
       message: "Invalid JSON\n\n" + error.message,
     };
   }
@@ -80,11 +73,9 @@ function validateAIResponse(text) {
 
 /**
  * Normalize JSON field names for backward compatibility
- * Accepts both old names (meetingDate) and new names (date)
  */
 function normalizeJSONFields(json) {
   
-  // Normalize field names - accept both old and new format
   if (json.meetingDate && !json.date) {
     json.date = json.meetingDate;
   }
@@ -116,23 +107,18 @@ function normalizeJSONFields(json) {
  * Auto-generate meeting code if missing
  */
 function ensureMeetingCode(json) {
-  // If meeting code already exists and valid, keep it
   if (json.meetingCode && String(json.meetingCode).trim() !== "") {
     return json;
   }
-
-  // Generate new meeting code
   json.meetingCode = MeetingCodeEngine.generate();
   return json;
 }
 
 /**
  * Check for duplicate meeting by unique identifier
- * Unique Key = Date + StartTime + Location + ChairedBy + Agenda
  */
 function checkUniqueMeeting(json) {
   
-  // Validate required fields
   if (!json.date || String(json.date).trim() === "") {
     throw new Error("Meeting Date is missing from JSON.");
   }
@@ -153,7 +139,6 @@ function checkUniqueMeeting(json) {
     throw new Error("Agenda is missing from JSON.");
   }
 
-  // Check if meeting with same unique identifier already exists
   var existingMeeting = ValidationEngine.checkMeetingExists(json);
   
   if (existingMeeting.exists) {
@@ -174,44 +159,86 @@ function checkUniqueMeeting(json) {
 }
 
 /**
- * Insert AI Response (WITH AUTO CODE + UNIQUE MEETING CHECK + BACKWARD COMPATIBILITY)
+ * MAIN: Insert AI Response
+ * Step 1: Validate JSON
+ * Step 2: Normalize fields
+ * Step 3: Auto-generate code
+ * Step 4: Check duplicate
+ * Step 5: Insert (with timeout handling)
  */
 function insertValidatedResponse(text) {
-  const validation = validateAIResponse(text);
-
+  
+  // Step 1: Parse & Validate JSON
+  var validation = validateAIResponse(text);
   if (!validation.success) {
     return validation;
   }
 
   try {
-    // STEP 1: Normalize field names for backward compatibility
+    // Step 2: Normalize field names
     var jsonData = normalizeJSONFields(validation.data);
     
-    // STEP 2: Auto-generate meeting code if missing
+    // Step 3: Auto-generate code
     jsonData = ensureMeetingCode(jsonData);
     
-    // STEP 3: Check for duplicate by unique identifier
+    // Step 4: Check for duplicates
     checkUniqueMeeting(jsonData);
     
-    // STEP 4: Insert only if no duplicate
-    const result = AIMapper.insert(jsonData);
-
+    // Step 5: Insert meeting
+    // Direct insert - no wrapper functions that cause timeout
+    var sheet = SheetService.getSheet();
+    var nextRow = SheetService.getNextInsertRow();
+    
+    // Get number of discussion points to know how many rows needed
+    var discussionCount = (jsonData.discussion && Array.isArray(jsonData.discussion)) 
+      ? jsonData.discussion.length 
+      : 1;
+    
+    if (discussionCount < 1) discussionCount = 1;
+    
+    var totalRows = discussionCount;
+    var endRow = nextRow + totalRows - 1;
+    
+    // Insert rows
+    if (totalRows > 1) {
+      SheetService.insertRows(nextRow, totalRows - 1);
+    }
+    
+    // Copy formatting
+    SheetService.copyTemplateFormatting(nextRow, totalRows);
+    
+    // Write meeting data
+    InsertEngine.writeMeetingData(jsonData, {
+      sheet: sheet,
+      startRow: nextRow,
+      endRow: endRow,
+      totalRows: totalRows,
+      lastColumn: SheetService.getLastColumn(),
+      templateRow: SheetService.getTemplateRow()
+    });
+    
+    // Merge cells
+    SheetService.mergeMeeting(nextRow, discussionCount);
+    
+    // Auto-size row height
+    var participantsText = (jsonData.participants && Array.isArray(jsonData.participants))
+      ? jsonData.participants.map(function(p) { return p.name || ""; }).join(", ")
+      : "";
+    
+    SheetService.autoSizeRowHeight(nextRow, endRow, participantsText, discussionCount);
+    
     return {
       success: true,
-
-      meetingCode: result.meetingCode,
-
-      startRow: result.startRow,
-
-      endRow: result.endRow,
-
-      message: "✅ Meeting inserted successfully.",
+      meetingCode: jsonData.meetingCode,
+      startRow: nextRow,
+      endRow: endRow,
+      message: "✅ Meeting inserted successfully."
     };
+    
   } catch (error) {
     return {
       success: false,
-
-      message: error.message,
+      message: error.message
     };
   }
 }
@@ -221,8 +248,6 @@ function insertValidatedResponse(text) {
  */
 function aiControllerHealthCheck() {
   Logger.log("================================");
-
   Logger.log("AI Controller Ready");
-
   Logger.log("================================");
 }
