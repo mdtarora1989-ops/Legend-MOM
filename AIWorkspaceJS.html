@@ -3,12 +3,34 @@
   let validatedJSON = null;
   let lastImageAIText = null;
   let lastImageOcrText = null;
+  let isInserting = false; // Prevent double-click
 
   /*************************************************
    * Status
    *************************************************/
   function setStatus(message) {
     document.getElementById("statusText").textContent = message;
+  }
+
+  /*************************************************
+   * Enable/Disable Insert Button
+   *************************************************/
+  function enableInsertButton() {
+    var btn = document.getElementById("insertBtn");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Insert into MOM Sheet";
+    }
+    isInserting = false;
+  }
+
+  function disableInsertButton() {
+    var btn = document.getElementById("insertBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Processing... Please wait";
+    }
+    isInserting = true;
   }
 
   /*************************************************
@@ -121,30 +143,41 @@
   }
 
   /*************************************************
-   * Insert
+   * Insert (with duplicate prevention)
    *************************************************/
   function insertResponse() {
+    // Check if already inserting
+    if (isInserting) {
+      alert("Meeting is already being inserted. Please wait...");
+      return;
+    }
+
     if (validatedJSON == null) {
       alert("Validate JSON first.");
       return;
     }
 
-    setStatus("Inserting...");
+    // Disable button to prevent double-click
+    disableInsertButton();
+    setStatus("Inserting... (This may take a few seconds)");
 
     google.script.run
       .withSuccessHandler(function (result) {
+        enableInsertButton();
+        
         if (result.success) {
-          alert("Meeting Created!\n\nMeeting Code: " + result.meetingCode);
-          setStatus("Completed");
+          alert("✅ Meeting Created Successfully!\n\nMeeting Code: " + result.meetingCode + "\n\nRows: " + result.startRow + " - " + result.endRow);
+          setStatus("Completed - New meeting inserted");
           resetWorkspace();
         } else {
-          alert(result.message);
-          setStatus("Insert Failed");
+          alert("❌ Error: " + result.message);
+          setStatus("Insert Failed - " + result.message);
         }
       })
       .withFailureHandler(function (err) {
-        alert(err.message);
-        setStatus("Insert Failed");
+        enableInsertButton();
+        alert("❌ Error: " + err.message);
+        setStatus("Insert Failed - Please try again");
       })
       .insertValidatedResponse(JSON.stringify(validatedJSON));
   }
@@ -257,7 +290,8 @@
     document.getElementById("previewCard").style.display = "none";
     document.getElementById('insertImageBtn').disabled = true;
 
-    setStatus("Ready");
+    enableInsertButton(); // Reset button state
+    setStatus("Ready - Choose Option A or B");
   }
 
   /*************************************************
@@ -266,6 +300,7 @@
   document.addEventListener('DOMContentLoaded', function() {
     loadAIProvider();
     loadOCRMethod();
+    enableInsertButton(); // Ensure button is enabled on load
     setStatus("Ready - Choose Option A or B");
   });
 </script>
