@@ -2,7 +2,7 @@
  * Legend MOM Management System
  * --------------------------------------------------------------------
  * Module  : AIController.js
- * Version : 2.2 (Auto Meeting Code Generation)
+ * Version : 2.3 (Unique Meeting Identifier Check)
  * Purpose : AI Workspace Controller
  **********************************************************************/
 
@@ -93,22 +93,46 @@ function ensureMeetingCode(json) {
 }
 
 /**
- * Pre-Insert Duplicate Check (ENHANCED)
+ * Check for duplicate meeting by unique identifier
+ * Unique Key = Date + StartTime + Location + ChairedBy + Agenda
  */
-function checkDuplicateMeeting(json) {
-  // Extract meeting code from JSON
-  var meetingCode = String(json.meetingCode || "").trim();
+function checkUniqueMeeting(json) {
   
-  if (meetingCode === "") {
-    throw new Error("Meeting code generation failed.");
+  // Validate required fields
+  if (!json.date || String(json.date).trim() === "") {
+    throw new Error("Meeting Date is missing from JSON.");
+  }
+  
+  if (!json.startTime || String(json.startTime).trim() === "") {
+    throw new Error("Start Time is missing from JSON.");
+  }
+  
+  if (!json.location || String(json.location).trim() === "") {
+    throw new Error("Location is missing from JSON.");
+  }
+  
+  if (!json.chairedBy || String(json.chairedBy).trim() === "") {
+    throw new Error("Chaired By is missing from JSON.");
+  }
+  
+  if (!json.agenda || String(json.agenda).trim() === "") {
+    throw new Error("Agenda is missing from JSON.");
   }
 
-  // Check in sheet
-  if (SheetService.meetingExists(meetingCode)) {
+  // Check if meeting with same unique identifier already exists
+  var existingMeeting = ValidationEngine.checkMeetingExists(json);
+  
+  if (existingMeeting.exists) {
     throw new Error(
-      "❌ DUPLICATE DETECTED!\n\n" +
-      "Meeting Code: " + meetingCode + " already exists in the sheet.\n\n" +
-      "Please try again - a new meeting code will be generated."
+      "❌ DUPLICATE MEETING DETECTED!\n\n" +
+      "A meeting with these details already exists:\n\n" +
+      "Date: " + json.date + "\n" +
+      "Time: " + json.startTime + "\n" +
+      "Location: " + json.location + "\n" +
+      "Chaired By: " + json.chairedBy + "\n" +
+      "Agenda: " + json.agenda + "\n\n" +
+      "Meeting Code: " + existingMeeting.meetingCode + " (Row " + existingMeeting.row + ")\n\n" +
+      "Please verify your data or use different meeting details."
     );
   }
 
@@ -116,7 +140,7 @@ function checkDuplicateMeeting(json) {
 }
 
 /**
- * Insert AI Response (WITH AUTO MEETING CODE + DUPLICATE PREVENTION)
+ * Insert AI Response (WITH AUTO CODE + UNIQUE MEETING CHECK)
  */
 function insertValidatedResponse(text) {
   const validation = validateAIResponse(text);
@@ -129,8 +153,8 @@ function insertValidatedResponse(text) {
     // STEP 1: Auto-generate meeting code if missing
     var jsonData = ensureMeetingCode(validation.data);
     
-    // STEP 2: Pre-insert duplicate check
-    checkDuplicateMeeting(jsonData);
+    // STEP 2: Check for duplicate by unique identifier
+    checkUniqueMeeting(jsonData);
     
     // STEP 3: Insert only if no duplicate
     const result = AIMapper.insert(jsonData);
