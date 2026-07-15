@@ -2,7 +2,7 @@
  * Legend MOM Management System
  * --------------------------------------------------------------------
  * Module  : AIController.js
- * Version : 2.3 (Unique Meeting Identifier Check)
+ * Version : 2.4 (Backward Compatible Field Names)
  * Purpose : AI Workspace Controller
  **********************************************************************/
 
@@ -79,6 +79,40 @@ function validateAIResponse(text) {
 }
 
 /**
+ * Normalize JSON field names for backward compatibility
+ * Accepts both old names (meetingDate) and new names (date)
+ */
+function normalizeJSONFields(json) {
+  
+  // Normalize field names - accept both old and new format
+  if (json.meetingDate && !json.date) {
+    json.date = json.meetingDate;
+  }
+  
+  if (json.startingTime && !json.startTime) {
+    json.startTime = json.startingTime;
+  }
+  
+  if (json.endingTime && !json.endTime) {
+    json.endTime = json.endingTime;
+  }
+  
+  if (json.mType && !json.meetingType) {
+    json.meetingType = json.mType;
+  }
+  
+  if (json.chairperson && !json.chairedBy) {
+    json.chairedBy = json.chairperson;
+  }
+  
+  if (json.owner && !json.operationOwner) {
+    json.operationOwner = json.owner;
+  }
+  
+  return json;
+}
+
+/**
  * Auto-generate meeting code if missing
  */
 function ensureMeetingCode(json) {
@@ -140,7 +174,7 @@ function checkUniqueMeeting(json) {
 }
 
 /**
- * Insert AI Response (WITH AUTO CODE + UNIQUE MEETING CHECK)
+ * Insert AI Response (WITH AUTO CODE + UNIQUE MEETING CHECK + BACKWARD COMPATIBILITY)
  */
 function insertValidatedResponse(text) {
   const validation = validateAIResponse(text);
@@ -150,13 +184,16 @@ function insertValidatedResponse(text) {
   }
 
   try {
-    // STEP 1: Auto-generate meeting code if missing
-    var jsonData = ensureMeetingCode(validation.data);
+    // STEP 1: Normalize field names for backward compatibility
+    var jsonData = normalizeJSONFields(validation.data);
     
-    // STEP 2: Check for duplicate by unique identifier
+    // STEP 2: Auto-generate meeting code if missing
+    jsonData = ensureMeetingCode(jsonData);
+    
+    // STEP 3: Check for duplicate by unique identifier
     checkUniqueMeeting(jsonData);
     
-    // STEP 3: Insert only if no duplicate
+    // STEP 4: Insert only if no duplicate
     const result = AIMapper.insert(jsonData);
 
     return {
