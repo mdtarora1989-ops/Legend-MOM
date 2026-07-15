@@ -1,8 +1,8 @@
 /**********************************************************************
  * Legend MOM Management System
- * --------------------------------------------------------------------
+ * ------------------------------------------------------------
  * Module  : ValidationEngine.gs
- * Version : 1.2 (With Unique Meeting Check)
+ * Version : 1.3 (Check Only First Row of Meeting)
  * Purpose : Validate MOM Object & Check Duplicates by Unique ID
  **********************************************************************/
 
@@ -152,7 +152,9 @@ ValidationEngine.createMeetingUniqueKey = function (mom) {
 
 /**
  * Checks if a meeting with same unique identifier already exists
- * Returns: { exists: boolean, row: number }
+ * IMPORTANT: Only checks FIRST ROW of each meeting (where meeting code is present)
+ * Ignores discussion/sub-rows
+ * Returns: { exists: boolean, row: number, meetingCode: string }
  */
 ValidationEngine.checkMeetingExists = function (mom) {
   
@@ -160,7 +162,7 @@ ValidationEngine.checkMeetingExists = function (mom) {
   var lastRow = sheet.getLastRow();
   
   if (lastRow < CONFIG.FIRST_DATA_ROW) {
-    return { exists: false, row: -1 };
+    return { exists: false, row: -1, meetingCode: "" };
   }
   
   var uniqueKey = ValidationEngine.createMeetingUniqueKey(mom);
@@ -173,44 +175,42 @@ ValidationEngine.checkMeetingExists = function (mom) {
   var agendaCol = SheetService.column("AGENDA");
   var meetingCodeCol = SheetService.column("MEETING_CODE");
   
-  // Get all data ranges
-  var dateRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, dateCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
-  var startTimeRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, startTimeCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
-  var locationRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, locationCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
-  var chairedByRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, chairedByCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
-  var agendaRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, agendaCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
+  // Get all meeting codes to identify FIRST ROWS only
   var meetingCodeRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, meetingCodeCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
   
-  // Compare with each row
-  for (var i = 0; i < dateRange.length; i++) {
+  // Only check rows that have a meeting code (FIRST ROWS of each meeting)
+  for (var i = 0; i < meetingCodeRange.length; i++) {
     
     var existingMeetingCode = String(meetingCodeRange[i][0]).trim();
     
-    // Skip empty rows
+    // Skip rows without meeting code (these are discussion sub-rows)
     if (existingMeetingCode === "") {
       continue;
     }
     
-    // Build key from existing row
-    var existingDate = String(dateRange[i][0]).trim();
-    var existingStartTime = String(startTimeRange[i][0]).trim();
-    var existingLocation = String(locationRange[i][0]).trim();
-    var existingChairedBy = String(chairedByRange[i][0]).trim();
-    var existingAgenda = String(agendaRange[i][0]).trim();
+    var rowNumber = CONFIG.FIRST_DATA_ROW + i;
     
+    // Get data from this row
+    var existingDate = String(sheet.getRange(rowNumber, dateCol).getValue()).trim();
+    var existingStartTime = String(sheet.getRange(rowNumber, startTimeCol).getValue()).trim();
+    var existingLocation = String(sheet.getRange(rowNumber, locationCol).getValue()).trim();
+    var existingChairedBy = String(sheet.getRange(rowNumber, chairedByCol).getValue()).trim();
+    var existingAgenda = String(sheet.getRange(rowNumber, agendaCol).getValue()).trim();
+    
+    // Build key from existing row
     var existingKey = (existingDate + "|" + existingStartTime + "|" + existingLocation + "|" + existingChairedBy + "|" + existingAgenda).toLowerCase().trim();
     
     // If keys match, meeting already exists
     if (uniqueKey === existingKey) {
       return {
         exists: true,
-        row: CONFIG.FIRST_DATA_ROW + i,
+        row: rowNumber,
         meetingCode: existingMeetingCode
       };
     }
   }
   
-  return { exists: false, row: -1 };
+  return { exists: false, row: -1, meetingCode: "" };
 };
 
 
