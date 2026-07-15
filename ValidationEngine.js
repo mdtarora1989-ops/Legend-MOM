@@ -1,8 +1,8 @@
 /**********************************************************************
  * Legend MOM Management System
- * ------------------------------------------------------------
+ * --------------------------------------------------------------------
  * Module  : ValidationEngine.gs
- * Version : 1.3 (Check Only First Row of Meeting)
+ * Version : 1.4 (Optimized - Fast Meeting Lookup)
  * Purpose : Validate MOM Object & Check Duplicates by Unique ID
  **********************************************************************/
 
@@ -151,61 +151,85 @@ ValidationEngine.createMeetingUniqueKey = function (mom) {
 
 
 /**
- * Checks if a meeting with same unique identifier already exists
- * IMPORTANT: Only checks FIRST ROW of each meeting (where meeting code is present)
- * Ignores discussion/sub-rows
- * Returns: { exists: boolean, row: number, meetingCode: string }
+ * Get all meeting first rows efficiently
+ * Returns array of { row, code, date, startTime, location, chairedBy, agenda }
  */
-ValidationEngine.checkMeetingExists = function (mom) {
+ValidationEngine.getAllMeetingFirstRows = function () {
   
   var sheet = SheetService.getSheet();
   var lastRow = sheet.getLastRow();
   
   if (lastRow < CONFIG.FIRST_DATA_ROW) {
-    return { exists: false, row: -1, meetingCode: "" };
+    return [];
   }
   
-  var uniqueKey = ValidationEngine.createMeetingUniqueKey(mom);
-  
-  // Get all relevant columns
+  var meetings = [];
+  var meetingCodeCol = SheetService.column("MEETING_CODE");
   var dateCol = SheetService.column("DATE");
   var startTimeCol = SheetService.column("START_TIME");
   var locationCol = SheetService.column("LOCATION");
   var chairedByCol = SheetService.column("CHAIRED_BY");
   var agendaCol = SheetService.column("AGENDA");
-  var meetingCodeCol = SheetService.column("MEETING_CODE");
   
-  // Get all meeting codes to identify FIRST ROWS only
-  var meetingCodeRange = sheet.getRange(CONFIG.FIRST_DATA_ROW, meetingCodeCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
+  // Get all meeting codes (efficient batch read)
+  var meetingCodes = sheet.getRange(CONFIG.FIRST_DATA_ROW, meetingCodeCol, lastRow - CONFIG.FIRST_DATA_ROW + 1, 1).getValues();
   
-  // Only check rows that have a meeting code (FIRST ROWS of each meeting)
-  for (var i = 0; i < meetingCodeRange.length; i++) {
+  // Iterate only rows with meeting codes
+  for (var i = 0; i < meetingCodes.length; i++) {
+    var code = String(meetingCodes[i][0]).trim();
     
-    var existingMeetingCode = String(meetingCodeRange[i][0]).trim();
-    
-    // Skip rows without meeting code (these are discussion sub-rows)
-    if (existingMeetingCode === "") {
+    // Skip empty rows (discussion sub-rows)
+    if (code === "") {
       continue;
     }
     
     var rowNumber = CONFIG.FIRST_DATA_ROW + i;
     
-    // Get data from this row
-    var existingDate = String(sheet.getRange(rowNumber, dateCol).getValue()).trim();
-    var existingStartTime = String(sheet.getRange(rowNumber, startTimeCol).getValue()).trim();
-    var existingLocation = String(sheet.getRange(rowNumber, locationCol).getValue()).trim();
-    var existingChairedBy = String(sheet.getRange(rowNumber, chairedByCol).getValue()).trim();
-    var existingAgenda = String(sheet.getRange(rowNumber, agendaCol).getValue()).trim();
+    // Get all data for this row in one batch
+    var rowData = sheet.getRange(rowNumber, 1, 1, SheetService.getLastColumn()).getValues()[0];
     
-    // Build key from existing row
-    var existingKey = (existingDate + "|" + existingStartTime + "|" + existingLocation + "|" + existingChairedBy + "|" + existingAgenda).toLowerCase().trim();
+    var meeting = {
+      row: rowNumber,
+      code: code,
+      date: String(rowData[dateCol - 1] || "").trim(),
+      startTime: String(rowData[startTimeCol - 1] || "").trim(),
+      location: String(rowData[locationCol - 1] || "").trim(),
+      chairedBy: String(rowData[chairedByCol - 1] || "").trim(),
+      agenda: String(rowData[agendaCol - 1] || "").trim()
+    };
+    
+    meetings.push(meeting);
+  }
+  
+  return meetings;
+};
+
+
+/**
+ * Checks if a meeting with same unique identifier already exists
+ * OPTIMIZED: Uses cached meeting list and early exit
+ * Returns: { exists: boolean, row: number, meetingCode: string }
+ */
+ValidationEngine.checkMeetingExists = function (mom) {
+  
+  var uniqueKey = ValidationEngine.createMeetingUniqueKey(mom);
+  
+  // Get all meeting first rows (efficient batch read)
+  var existingMeetings = ValidationEngine.getAllMeetingFirstRows();
+  
+  // Quick lookup - iterate only meeting rows
+  for (var i = 0; i < existingMeetings.length; i++) {
+    var meeting = existingMeetings[i];
+    
+    // Build key from existing meeting
+    var existingKey = (meeting.date + "|" + meeting.startTime + "|" + meeting.location + "|" + meeting.chairedBy + "|" + meeting.agenda).toLowerCase().trim();
     
     // If keys match, meeting already exists
     if (uniqueKey === existingKey) {
       return {
         exists: true,
-        row: rowNumber,
-        meetingCode: existingMeetingCode
+        row: meeting.row,
+        meetingCode: meeting.code
       };
     }
   }
