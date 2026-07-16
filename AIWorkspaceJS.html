@@ -3,43 +3,12 @@
   let validatedJSON = null;
   let lastImageAIText = null;
   let lastImageOcrText = null;
-  let isInserting = false; // Prevent double-click
-  let insertTimeout = null; // Timeout safety
 
   /*************************************************
    * Status
    *************************************************/
   function setStatus(message) {
     document.getElementById("statusText").textContent = message;
-  }
-
-  /*************************************************
-   * Enable/Disable Insert Button
-   *************************************************/
-  function enableInsertButton() {
-    var btn = document.getElementById("insertBtn");
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = "Insert into MOM Sheet";
-    }
-    isInserting = false;
-    if (insertTimeout) clearTimeout(insertTimeout);
-  }
-
-  function disableInsertButton() {
-    var btn = document.getElementById("insertBtn");
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = "⏳ Processing... Please wait";
-    }
-    isInserting = true;
-    
-    // Safety timeout - re-enable after 60 seconds
-    if (insertTimeout) clearTimeout(insertTimeout);
-    insertTimeout = setTimeout(function() {
-      setStatus("⚠️ Process took too long. Re-enabled button. Please try again.");
-      enableInsertButton();
-    }, 60000);
   }
 
   /*************************************************
@@ -142,7 +111,7 @@
           null,
           2,
         );
-        setStatus("✅ JSON Valid - Ready to Insert");
+        setStatus("JSON Valid - Ready to Insert");
       })
       .withFailureHandler(function (err) {
         alert(err.message);
@@ -152,46 +121,30 @@
   }
 
   /*************************************************
-   * Insert (with enhanced duplicate prevention)
+   * Insert
    *************************************************/
   function insertResponse() {
-    // Check if already inserting
-    if (isInserting) {
-      alert("⏳ Meeting is already being inserted. Please wait...\n\nIf this takes more than 60 seconds, the button will auto-enable.");
-      return;
-    }
-
     if (validatedJSON == null) {
       alert("Validate JSON first.");
       return;
     }
 
-    // Disable button to prevent double-click
-    disableInsertButton();
-    setStatus("🔄 Inserting... (This may take a few seconds)");
+    setStatus("Inserting...");
 
     google.script.run
       .withSuccessHandler(function (result) {
-        enableInsertButton();
-        
         if (result.success) {
-          alert(
-            "✅ Meeting Created Successfully!\n\n" +
-            "Meeting Code: " + result.meetingCode + "\n" +
-            "Rows: " + result.startRow + " - " + result.endRow + "\n\n" +
-            "(Duplicate prevention active - no duplicate will be created)"
-          );
-          setStatus("✅ Completed - New meeting inserted");
+          alert("Meeting Created!\n\nMeeting Code: " + result.meetingCode);
+          setStatus("Completed");
           resetWorkspace();
         } else {
-          alert("❌ Error: " + result.message);
-          setStatus("❌ Insert Failed - " + result.message);
+          alert(result.message);
+          setStatus("Insert Failed");
         }
       })
       .withFailureHandler(function (err) {
-        enableInsertButton();
-        alert("❌ Error: " + err.message);
-        setStatus("❌ Insert Failed - Please try again");
+        alert(err.message);
+        setStatus("Insert Failed");
       })
       .insertValidatedResponse(JSON.stringify(validatedJSON));
   }
@@ -304,8 +257,7 @@
     document.getElementById("previewCard").style.display = "none";
     document.getElementById('insertImageBtn').disabled = true;
 
-    enableInsertButton(); // Reset button state
-    setStatus("Ready - Choose Option A or B");
+    setStatus("Ready");
   }
 
   /*************************************************
@@ -314,7 +266,6 @@
   document.addEventListener('DOMContentLoaded', function() {
     loadAIProvider();
     loadOCRMethod();
-    enableInsertButton(); // Ensure button is enabled on load
     setStatus("Ready - Choose Option A or B");
   });
 </script>
